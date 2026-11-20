@@ -46,7 +46,7 @@ const traitScore = (h) => ['active1', 'active2', 'passive1', 'passive2'].reduce(
 const statSum = (h) => STATS.reduce((t, [k]) => t + h.stats[k], 0);
 
 /* Hero Score from the Hero Transcendence & Divine Essence deck (burn multiplier left at 1).
-   Tales Score = Heroscore × (1 + trait counter): Hubert's Heroscore + Trait Multiplier, Ge's rule. */
+   Heroscore X = Heroscore × (1 + trait counter): Hubert's Heroscore + Trait Multiplier, Ge's rule. */
 const RANK = { basic: 0, advanced: 1, elite: 2, exalted: 3, transcendent: 4 };
 const C_BASE = [150, 3000, 9000, 25000, 75000];
 const S_BASE = [150, 450, 1400, 10000, 30000];
@@ -65,16 +65,13 @@ function heroScore(h) {
   hsMemo.set(h.id, v);
   return v;
 }
-const talesScore = (h) => heroScore(h) * (1 + traitScore(h));
+const heroScoreX = (h) => heroScore(h) * (1 + traitScore(h));
 const fmtInt = (n) => Math.round(n).toLocaleString('en-US');
 const compact = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e7 ? 1 : 2)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(n >= 1e5 ? 0 : 1)}k` : String(Math.round(n)));
 
-/* Pet score from the same deck. Converted to the hero scale through Divine Essence:
-   at average rolls a hero yields Heroscore/600 DE and Heroscore/9838 GDE, a pet petScore/15 DE and petScore/240 GDE,
-   so one pet point is worth 40 hero points (41 by GDE). Pet Score = Hubert's pet score × 40. */
+/* Hubert's pet score from the same deck, kept on its own scale. */
 const STAR_SCORE = [0, 7000, 10000, 19000, 28000, 40000, 75000, 225000, 450000, 1000000];
 const PET_RARITY = { common: [2000, 2], uncommon: [25000, 3], rare: [175000, 4], legendary: [370000, 4], mythic: [780000, 4] };
-const PET_SCALE = 40;
 function petScoreHubert(p) {
   const a = p.gathering ? p.gathering.tier : 0, b = p.combat ? p.combat.tier : 0, c = p.crafting ? p.crafting.tier : 0;
   const [rarityScore, tierMod] = PET_RARITY[p.rarity] || PET_RARITY.common;
@@ -83,7 +80,8 @@ function petScoreHubert(p) {
   const starScore = STAR_SCORE[Math.min(9, a + b + c)] || 0;
   return (10 * starScore * D + rarityScore * (10 + a + b + c)) / (10000 * D);
 }
-const petScore = (p) => petScoreHubert(p) * PET_SCALE;
+const petScore = petScoreHubert;
+const bigNum = (n) => (n >= 1e9 ? `${(n / 1e9).toFixed(2)} BILLION` : n >= 1e6 ? `${(n / 1e6).toFixed(2)} MILLION` : fmtInt(n));
 
 const geneSet = (id, label, values, name, extra = {}) => ({ id, label, type: 'set', gene: true, values, name, order: 'key', ...extra });
 const set = (id, label, values, name, extra = {}) => ({ id, label, type: 'set', values, name: name || cap, order: 'count', ...extra });
@@ -95,7 +93,7 @@ const yesNo = (yes, no) => (v) => (v === 'yes' ? yes : no);
 /* ================= HEROES ================= */
 const HERO_TABS = [
   { id: 'basics', label: 'Basics', groups: [
-    range('tales', 'Tales Score', talesScore, { hint: "Hubert's Heroscore × (1 + trait counter)" }),
+    range('hsx', 'Heroscore X', heroScoreX, { hint: "Hubert's Heroscore × (1 + trait counter)" }),
     range('hs', 'Heroscore', heroScore),
     geneSet('class', 'Class', sg('class'), (r) => className(HERO_CLASSES[r]) || `#${r}`, { tag: (r) => TIER_TAG[tierOf(r)] }),
     geneSet('subClass', 'Subclass', sg('subClass'), (r) => className(HERO_CLASSES[r]) || `#${r}`, { tag: (r) => TIER_TAG[tierOf(r)] }),
@@ -147,7 +145,7 @@ const HERO_TABS = [
   { id: 'gear', label: 'Gear', groups: SLOTS.map(([k, l]) => set(`eq-${k}`, l, (h) => [h.equipment && h.equipment[k] ? 'on' : 'off'], (v) => (v === 'on' ? 'Equipped' : 'Empty'), { order: ['on', 'off'] })) },
 ];
 const HERO_SORTS = [
-  ['tales', 'Tales Score', (a, b) => talesScore(b) - talesScore(a)],
+  ['hsx', 'Heroscore X', (a, b) => heroScoreX(b) - heroScoreX(a)],
   ['hs', 'Heroscore', (a, b) => heroScore(b) - heroScore(a)],
   ['rarity', 'Rarity', (a, b) => rarityIdx(b.rarity) - rarityIdx(a.rarity) || b.level - a.level],
   ['level', 'Level', (a, b) => b.level - a.level || rarityIdx(b.rarity) - rarityIdx(a.rarity)],
@@ -181,7 +179,7 @@ const HEROES = {
       const t = traitScore(h);
       const strip = el('div', 'hs');
       const a = el('span'); a.append('HEROSCORE ', el('b', null, fmtInt(heroScore(h))));
-      const b = el('span', 'x'); b.append(`×${1 + t} · TALES `, el('b', null, fmtInt(talesScore(h))));
+      const b = el('span', 'x'); b.append(`×${1 + t} · HSX `, el('b', null, fmtInt(heroScoreX(h))));
       strip.append(a, b);
       entry.slot.replaceChildren(entry.handle.element, strip);
       entry.slot.classList.add('live');
@@ -194,7 +192,6 @@ const HEROES = {
   tiles: (list) => {
     const n = (f) => list.filter(f).length;
     return [
-      ['Tales Score', fmtInt(list.reduce((t, h) => t + talesScore(h), 0))], ['Heroscore', fmtInt(list.reduce((t, h) => t + heroScore(h), 0))],
       ['Mythic', n((h) => h.rarity === 'mythic')], ['Legendary', n((h) => h.rarity === 'legendary')], ['Shiny', n((h) => h.shiny)],
       ['Gen 0', n((h) => h.generation === 0)], ['Exalted', n((h) => getClassTier(h.statGenes.raw.class.d) === 'exalted')],
       ['Elite', n((h) => getClassTier(h.statGenes.raw.class.d) === 'elite')], ['Max level', Math.max(...list.map((h) => h.level))],
@@ -202,9 +199,11 @@ const HEROES = {
     ];
   },
   rarity: (h) => h.rarity,
-  subtotal: (list) => `Tales Score ${fmtInt(list.reduce((t, h) => t + talesScore(h), 0))}`,
-  metric: talesScore,
-  metricLabel: 'Tales Score',
+  subtotal: (list) => `Heroscore X ${fmtInt(list.reduce((t, h) => t + heroScoreX(h), 0))}`,
+  metric: heroScoreX,
+  metricLabel: 'Heroscore X',
+  title: 'Legion',
+  headScore: (list) => ['Heroscore X', bigNum(list.reduce((t, h) => t + heroScoreX(h), 0))],
   slotSize: 'hero',
 };
 
@@ -215,7 +214,7 @@ const tierName = (t) => (t === '0' ? 'None' : `${stars(Number(t))} ${({ 1: 'Comm
 const bondState = (p) => (p.equippedTo === REROLLING ? 'rerolling' : p.equippedTo ? 'bonded' : 'free');
 const PET_TABS = [
   { id: 'basics', label: 'Basics', groups: [
-    range('pscore', 'Pet Score', petScore, { hint: "Hubert's pet score × 40, on the heroes' scale" }),
+    range('pscore', "Hubert's Petscore", petScore, { hint: 'From the Hero Transcendence & Divine Essence deck' }),
     set('rarity', 'Rarity', (p) => [p.rarity], cap, { order: RARITY, swatch: (r) => `var(--r-${r})` }),
     set('element', 'Element', (p) => [p.element], cap),
     set('egg', 'Egg', (p) => [p.eggType], (e) => `${cap(e)} egg`, { order: ['blue', 'grey', 'green'] }),
@@ -241,7 +240,7 @@ const PET_TABS = [
 ];
 const bonusScore = (p) => [p.gathering, p.crafting, p.combat].reduce((t, b) => t + (b ? b.tier : 0), 0);
 const PET_SORTS = [
-  ['pscore', 'Pet Score', (a, b) => petScore(b) - petScore(a)],
+  ['pscore', "Hubert's Petscore", (a, b) => petScore(b) - petScore(a)],
   ['rarity', 'Rarity', (a, b) => rarityIdx(b.rarity) - rarityIdx(a.rarity) || bonusScore(b) - bonusScore(a)],
   ['bonus', 'Bonus stars', (a, b) => bonusScore(b) - bonusScore(a) || rarityIdx(b.rarity) - rarityIdx(a.rarity)],
   ['combat', 'Combat tier', (a, b) => (b.combat ? b.combat.tier : 0) - (a.combat ? a.combat.tier : 0)],
@@ -298,7 +297,7 @@ function petCard(entry) {
     const hp = q('.dfk-heroHealth'), mp = q('.dfk-heroMana');
     const total = (p.gathering ? p.gathering.tier : 0) + (p.crafting ? p.crafting.tier : 0) + (p.combat ? p.combat.tier : 0);
     if (hp) { setOwnText(hp, `${total}★`); const img = hp.querySelector('img'); if (img) img.remove(); setOwnText(hp.querySelector('.dfk-tooltip'), 'Bonus stars'); }
-    if (mp) { setOwnText(mp, compact(petScore(p))); const img = mp.querySelector('img'); if (img) img.remove(); setOwnText(mp.querySelector('.dfk-tooltip'), `Pet Score ${fmtInt(petScore(p))}`); }
+    if (mp) { setOwnText(mp, compact(petScore(p))); const img = mp.querySelector('img'); if (img) img.remove(); setOwnText(mp.querySelector('.dfk-tooltip'), `Hubert's Petscore ${fmtInt(petScore(p))}`); }
     root.style.visibility = '';
   };
   handle.ready.then(fix, fix);
@@ -317,7 +316,7 @@ const PETS = {
       if (root) {
         const strip = el('div', 'hs');
         const a = el('span'); a.append(`${p.bonusCount || 0} BONUS · ${cap(p.rarity).toUpperCase()}`);
-        const b = el('span', 'x'); b.append('PET ', el('b', null, fmtInt(petScore(p))));
+        const b = el('span', 'x'); b.append('PETSCORE ', el('b', null, fmtInt(petScore(p))));
         strip.append(a, b);
         entry.slot.replaceChildren(root, strip);
         entry.slot.classList.add('live');
@@ -338,7 +337,7 @@ const PETS = {
     const bl = el('div', 'blist');
     bl.append(bonusLine('G', p.gathering), bonusLine('C', p.crafting), bonusLine('X', p.combat));
     body.append(bl);
-    const ps = el('div', 'pscore'); ps.append('PET SCORE ', el('b', null, fmtInt(petScore(p)))); body.append(ps);
+    const ps = el('div', 'pscore'); ps.append('PETSCORE ', el('b', null, fmtInt(petScore(p)))); body.append(ps);
     const bond = el('div', 'pbond');
     if (p.equippedTo && p.equippedTo !== REROLLING) {
       bond.append('Bonded to ');
@@ -359,16 +358,16 @@ const PETS = {
   tiles: (list) => {
     const n = (f) => list.filter(f).length;
     return [
-      ['Pet Score', fmtInt(list.reduce((t, p) => t + petScore(p), 0))],
       ['Mythic', n((p) => p.rarity === 'mythic')], ['Legendary', n((p) => p.rarity === 'legendary')], ['Shiny', n((p) => p.shiny)],
       ['Bonded', n((p) => bondState(p) === 'bonded')], ['3★ combat', n((p) => p.combat && p.combat.tier === 3)],
       ['3★ gathering', n((p) => p.gathering && p.gathering.tier === 3)], ['Families', new Set(list.map((p) => p.species && p.species.family)).size],
     ];
   },
   rarity: (p) => p.rarity,
-  subtotal: (list) => `Pet Score ${fmtInt(list.reduce((t, p) => t + petScore(p), 0))}`,
+  subtotal: (list) => `Hubert's Petscore ${fmtInt(list.reduce((t, p) => t + petScore(p), 0))}`,
   metric: petScore,
-  metricLabel: 'Pet Score',
+  metricLabel: 'Petscore',
+  headScore: (list) => ["Hubert's Petscore", bigNum(list.reduce((t, p) => t + petScore(p), 0))],
   get slotSize() { return petView === 'cards' ? 'hero' : 'pet'; },
 };
 
@@ -741,30 +740,17 @@ function renderGrid() {
 let timer = 0;
 function schedule() { clearTimeout(timer); timer = setTimeout(() => { renderGrid(); updateFacets(); }, 120); }
 
-/* ---------- legion score ---------- */
-function renderLegion() {
-  const H = SECTIONS.heroes, P = SECTIONS.pets;
-  const hv = H.state === 'ready' ? H.data.reduce((t, h) => t + talesScore(h), 0) : null;
-  const pv = P.state === 'ready' ? P.data.reduce((t, p) => t + petScore(p), 0) : null;
-  const part = (v, st) => (v != null ? fmtInt(v) : st === 'loading' ? 'reading…' : st === 'error' ? 'not read' : '—');
-  $('#ls-heroes').textContent = part(hv, H.state);
-  $('#ls-pets').textContent = part(pv, P.state);
-  $('#ls-hn').textContent = H.state === 'ready' ? `${H.data.length} heroes` : '';
-  $('#ls-pn').textContent = P.state === 'ready' ? `${P.data.length} pets` : '';
-  const total = (hv || 0) + (pv || 0);
-  const done = H.state !== 'loading' && P.state !== 'loading';
-  $('#mega').textContent = hv == null && pv == null ? (done ? '—' : '…') : fmtInt(total);
-  $('#mega').classList.toggle('partial', !done);
-  if (hv != null || pv != null) {
-    $('#ls-bar-h').style.flexGrow = String(hv || 0); $('#ls-bar-p').style.flexGrow = String(pv || 0);
-  }
-}
-
 /* ---------- headline ---------- */
 function renderHeadline() {
   const sec = S();
-  $('#sec-title').textContent = sec.label;
+  $('#sec-title').textContent = sec.title || sec.label;
   $('#total').textContent = sec.state === 'ready' ? sec.data.length : '';
+  const hs = $('#sec-score');
+  if (sec.headScore && sec.state === 'ready' && sec.data.length) {
+    const [label, value] = sec.headScore(sec.data);
+    hs.replaceChildren(el('em', null, label), el('span', null, value));
+    hs.hidden = false;
+  } else hs.hidden = true;
   $('#who').textContent = owner ? `${owner.slice(0, 6)}…${owner.slice(-4)} · ${chainName}` : '';
   const ready = sec.state === 'ready' && sec.data.length;
   $('#tiles').replaceChildren(...(ready ? sec.tiles(sec.data) : []).map(([k, v]) => { const d = el('div', 'tile'); d.append(el('span', 'label', k), el('b', null, String(v))); return d; }));
@@ -830,13 +816,13 @@ function resetSection(sec) {
 function finish(sec, data, my) {
   if (my !== run) return;
   sec.data = data; buildCache(sec); sec.state = 'ready';
-  renderSecTabs(); renderLegion();
+  renderSecTabs();
   if (current === sec.key) { renderHeadline(); buildSidebar(); renderGrid(); updateFacets(); }
 }
 function fail(sec, e, my) {
   if (my !== run) return;
   console.error(sec.key, e);
-  sec.state = 'error'; renderSecTabs(); renderLegion();
+  sec.state = 'error'; renderSecTabs();
   if (current === sec.key) { renderHeadline(); buildSidebar(); $('#count').textContent = `Could not read ${sec.label.toLowerCase()}. Load again in a moment.`; }
 }
 
@@ -850,7 +836,7 @@ async function load() {
   heroById.clear(); gearByKey.clear(); hsMemo.clear(); tokens = [];
   for (const sec of Object.values(SECTIONS)) { resetSection(sec); sec.state = 'loading'; }
   $('#void').hidden = true; $('#headline').hidden = false;
-  renderSecTabs(); renderLegion(); renderHeadline(); buildSidebar(); renderGrid();
+  renderSecTabs(); renderHeadline(); buildSidebar(); renderGrid();
   $('#btn-load').disabled = true;
   setStatus('Reading the legion from the chain…');
   store.set('dfk-tales:addr', addr); store.set('dfk-tales:chain', String(chainId));

@@ -73,6 +73,9 @@
 .headline[hidden] { display: none; }
 .headline h1 { font: 700 clamp(34px, 5vw, 58px)/0.95 var(--display); text-transform: uppercase; letter-spacing: .02em; margin: 4px 0 0; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
 .headline h1 .tot { color: var(--red); font-family: var(--mono); font-size: .62em; }
+.headline h1 .score { display: inline-flex; align-items: baseline; gap: 12px; font: 600 .5em var(--mono); letter-spacing: 0; color: var(--text); margin-left: 10px; padding-left: 22px; border-left: 2px solid var(--line-2); }
+.headline h1 .score em { font: 600 13px var(--display); font-style: normal; letter-spacing: .14em; color: var(--muted); }
+.headline h1 .score[hidden] { display: none; }
 .sections { display: flex; flex-wrap: wrap; gap: 0; border-bottom: 1px solid var(--line); }
 .sections button { border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); padding: 12px 18px 11px; font-size: 13px; }
 .sections button:hover { color: var(--text); border-color: transparent; border-bottom-color: var(--line-2); }
@@ -83,24 +86,6 @@
 .seg.inline button { padding: 7px 12px; }
 .seg.inline[hidden] { display: none; }
 
-/* legion score */
-.legion { border: 1px solid var(--line); border-left: 4px solid var(--red); background: linear-gradient(90deg, rgba(227,23,43,.10), rgba(0,0,0,0) 60%), var(--panel); padding: 18px 22px 20px; display: grid; gap: 10px; }
-.legion-top { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: baseline; }
-.legion-top .label { color: var(--red); font-size: 12px; }
-.legion-who { font-size: 11.5px; color: var(--muted); }
-.mega { font: 700 clamp(56px, 10.5vw, 148px)/0.9 var(--display); letter-spacing: -.01em; font-variant-numeric: tabular-nums; color: #fff; text-shadow: 0 0 40px rgba(227,23,43,.25); overflow-wrap: anywhere; }
-.mega.partial { color: #9a9a9a; }
-.lsbar { display: flex; height: 6px; background: var(--panel-2); }
-.lsbar i { display: block; height: 100%; flex: 0 0 0; flex-basis: 0; }
-#ls-bar-h { background: var(--red); flex-grow: 1; }
-#ls-bar-p { background: var(--text); flex-grow: 0; }
-.split { display: flex; flex-wrap: wrap; gap: 6px 28px; font: 12.5px var(--mono); color: var(--muted); }
-.split i { display: inline-block; width: 9px; height: 9px; margin-right: 8px; vertical-align: 0; }
-.split .sh i { background: var(--red); } .split .sp i { background: var(--text); }
-.split b { color: var(--text); font-weight: 600; margin-left: 4px; }
-.split em { font-style: normal; color: var(--muted); margin-left: 6px; }
-.formula { margin: 0; font-size: 12.5px; color: var(--muted); max-width: 90ch; }
-.formula b { color: var(--text); font-weight: 500; }
 .pscore { font: 11px var(--mono); color: var(--muted); margin-top: 6px; }
 .pscore b { color: var(--red); font-weight: 600; }
 
@@ -243,20 +228,6 @@
     <div class="status" id="status" role="status"></div>
 
     <section class="headline" id="headline" hidden>
-      <div class="legion" id="legion" aria-label="Legion Score">
-        <div class="legion-top">
-          <span class="label">Legion Score</span>
-          <span class="mono legion-who" id="who"></span>
-        </div>
-        <div class="mega" id="mega">…</div>
-        <div class="lsbar" aria-hidden="true"><i id="ls-bar-h"></i><i id="ls-bar-p"></i></div>
-        <div class="split">
-          <span class="sh"><i></i>Heroes · Tales Score <b id="ls-heroes"></b> <em id="ls-hn"></em></span>
-          <span class="sp"><i></i>Pets · Pet Score <b id="ls-pets"></b> <em id="ls-pn"></em></span>
-        </div>
-        <p class="formula"><b>Tales Score = Hubert's Heroscore + Trait Multiplier.</b> Heroscore × (1 + trait counter), with Basic 0, Advanced 1, Elite 2, Exalted 3 on the four dominant traits.</p>
-        <p class="formula"><b>Pet Score = Hubert's pet score × 40,</b> the rate at which pets and heroes turn into Divine Essence, so both count on the same scale.</p>
-      </div>
       <div class="sections" id="sections" role="tablist" aria-label="Collection">
         <button type="button" role="tab" id="sec-heroes" data-sec="heroes">Heroes <span class="n"></span></button>
         <button type="button" role="tab" id="sec-pets" data-sec="pets">Pets <span class="n"></span></button>
@@ -264,7 +235,8 @@
         <button type="button" role="tab" id="sec-items" data-sec="items">Items <span class="n"></span></button>
       </div>
       <div>
-        <h1><span id="sec-title">Heroes</span> <span class="tot" id="total"></span></h1>
+        <div class="eyebrow" id="who"></div>
+        <h1><span id="sec-title">Legion</span> <span class="tot" id="total"></span> <span class="score" id="sec-score" hidden></span></h1>
       </div>
       <div class="tiles" id="tiles"></div>
       <div class="rbar" id="rbar" aria-hidden="true"></div>
