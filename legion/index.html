@@ -73,7 +73,7 @@
 .headline[hidden] { display: none; }
 .headline h1 { font: 700 clamp(34px, 5vw, 58px)/0.95 var(--display); text-transform: uppercase; letter-spacing: .02em; margin: 4px 0 0; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
 .headline h1 span { color: var(--red); font-family: var(--mono); font-size: .62em; }
-.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); }
 .tile { background: var(--bg); padding: 10px 12px; display: grid; gap: 2px; }
 .tile b { font: 600 22px var(--mono); }
 .rbar { display: flex; height: 6px; background: var(--panel-2); }
@@ -93,6 +93,7 @@
 .slot { white-space: pre-line; width: 300px; height: 430px; border: 1px solid var(--line); background: repeating-linear-gradient(135deg, #070707 0 8px, #0b0b0b 8px 16px); display: grid; place-items: center; color: var(--muted); font: 11.5px var(--mono); text-align: center; padding: 16px; }
 .slot.live { border: 0; background: none; padding: 0; display: block; }
 .void { padding: 70px 0; display: grid; gap: 10px; }
+.void[hidden] { display: none; }
 .void h2 { font: 700 clamp(30px, 5vw, 54px)/1 var(--display); text-transform: uppercase; margin: 0; }
 .void h2 span { color: var(--red); }
 .void p { margin: 0; color: var(--muted); max-width: 60ch; }
@@ -234,10 +235,10 @@ const TABS = [
     geneSet('background', 'Background', vg('background'), (r) => cap(BACKGROUNDS[r]) || `#${r}`),
   ] },
   { id: 'attributes', label: 'Traits', groups: [
-    geneSet('active1', 'Active 1', sg('active1'), skillName(ACTIVE_SKILLS), { tag: (r) => TIER_TAG[tierOf(r)] }),
-    geneSet('active2', 'Active 2', sg('active2'), skillName(ACTIVE_SKILLS), { tag: (r) => TIER_TAG[tierOf(r)] }),
-    geneSet('passive1', 'Passive 1', sg('passive1'), skillName(PASSIVE_SKILLS), { tag: (r) => TIER_TAG[tierOf(r)] }),
-    geneSet('passive2', 'Passive 2', sg('passive2'), skillName(PASSIVE_SKILLS), { tag: (r) => TIER_TAG[tierOf(r)] }),
+    geneSet('active1', 'Active 1', sg('active1'), skillName(ACTIVE_SKILLS), { wide: true, tag: (r) => TIER_TAG[tierOf(r)] }),
+    geneSet('active2', 'Active 2', sg('active2'), skillName(ACTIVE_SKILLS), { wide: true, tag: (r) => TIER_TAG[tierOf(r)] }),
+    geneSet('passive1', 'Passive 1', sg('passive1'), skillName(PASSIVE_SKILLS), { wide: true, tag: (r) => TIER_TAG[tierOf(r)] }),
+    geneSet('passive2', 'Passive 2', sg('passive2'), skillName(PASSIVE_SKILLS), { wide: true, tag: (r) => TIER_TAG[tierOf(r)] }),
     range('trait', 'Trait score', traitScore, { hint: 'Dominant traits: Advanced 1, Elite 2, Exalted 3' }),
     geneSet('profession', 'Gathering profession', sg('profession'), (r) => cap(PROFESSIONS[r]) || `#${r}`),
     geneSet('crafting1', 'Crafting 1', sg('crafting1'), (r) => CRAFTING_PROFESSIONS[r] || `#${r}`),
