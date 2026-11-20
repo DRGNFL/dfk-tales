@@ -651,6 +651,13 @@ function jumpToHero(id) {
 
 /* ---------- loading ---------- */
 let run = 0;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// The public node drops calls when it is busy; try again a few times before giving up.
+async function retry(fn, tries = 4) {
+  for (let i = 0; ; i++) {
+    try { return await fn(); } catch (e) { if (i >= tries - 1) throw e; await sleep(700 * (i + 1) * (i + 1)); }
+  }
+}
 const isAddr = (a) => /^0x[0-9a-fA-F]{40}$/.test(a.trim());
 function setStatus(t, err = false) { const s = $('#status'); s.textContent = t; s.classList.toggle('err', err); }
 
@@ -689,24 +696,24 @@ async function load() {
   setStatus('Reading the legion from the chain…');
   store.set('dfk-tales:addr', addr); store.set('dfk-tales:chain', String(chainId));
 
-  const pGear = client.equipment.byOwner(addr, { includeListed: true }).then((list) => {
+  const pGear = retry(() => client.equipment.byOwner(addr, { includeListed: true })).then((list) => {
     if (my !== run) return list;
     for (const e of list) gearByKey.set(`${e.kind === 'offhand' ? 'accessory' : e.kind}:${e.id}`, e);
     return list;
   });
   const pHeroes = (async () => {
-    const ids = await client.heroes.idsByOwner(addr, { includeListed: true });
+    const ids = await retry(() => client.heroes.idsByOwner(addr, { includeListed: true }));
     const out = [];
     for (let i = 0; i < ids.length; i += 60) {
       if (my !== run) return out;
       if (current === 'heroes') $('#count').textContent = `Reading heroes ${Math.min(i + 60, ids.length)} / ${ids.length}`;
-      out.push(...(await client.heroes.getMany(ids.slice(i, i + 60))));
+      out.push(...(await retry(() => client.heroes.getMany(ids.slice(i, i + 60)))));
     }
     return out;
   })();
-  const pPets = client.pets.byOwner(addr, { includeListed: true });
-  const pItems = client.items.balances(addr);
-  const pTokens = client.tokens.balances(addr).catch(() => []);
+  const pPets = retry(() => client.pets.byOwner(addr, { includeListed: true }));
+  const pItems = retry(() => client.items.balances(addr));
+  const pTokens = retry(() => client.tokens.balances(addr)).catch(() => []);
 
   pHeroes.then((list) => { list.forEach((h) => heroById.set(String(h.id), h)); });
   pGear.then((list) => finish(SECTIONS.gear, list, my), (e) => fail(SECTIONS.gear, e, my));
