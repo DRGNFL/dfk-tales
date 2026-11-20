@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Legion Viewer · DFK Tales</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/tales.css">
+<style>
+/* Filters pinned left, the legion on the right. Black field, one red for state, rarity colors only for rarity. */
+.lv { display: grid; grid-template-columns: 320px minmax(0, 1fr); min-height: calc(100vh - 52px); }
+
+/* ---------- sidebar ---------- */
+.side {
+  position: sticky; top: 52px; height: calc(100vh - 52px); overflow-y: auto; border-right: 1px solid var(--line);
+  background: var(--panel); display: flex; flex-direction: column;
+}
+.side-head { padding: 14px 16px 12px; border-bottom: 1px solid var(--line); display: grid; gap: 12px; position: sticky; top: 0; background: var(--panel); z-index: 2; }
+.side-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.side-title h2 { font: 700 15px var(--display); letter-spacing: .16em; text-transform: uppercase; margin: 0; display: flex; gap: 8px; align-items: center; }
+.side-title h2 b { font: 600 11px var(--mono); background: var(--red); color: #fff; padding: 2px 6px; }
+.side-title h2 b[hidden] { display: none; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line-2); }
+.seg button { border: 0; padding: 8px 6px; font-size: 11px; background: transparent; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--text); color: #000; }
+.seg-wrap { display: grid; gap: 6px; }
+.tabs { display: grid; grid-template-columns: repeat(5, 1fr); border-bottom: 1px solid var(--line); }
+.tabs button { border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); padding: 10px 2px 9px; font-size: 10.5px; letter-spacing: .1em; justify-content: center; position: relative; }
+.tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--red); }
+.tabs button .dot { position: absolute; top: 5px; right: 6px; width: 5px; height: 5px; background: var(--red); }
+.panel { padding: 4px 0 40px; }
+.panel[hidden] { display: none; }
+.side-empty { padding: 28px 16px; color: var(--muted); font-size: 13px; }
+
+.fg { border-bottom: 1px solid var(--line); }
+.fg > summary { list-style: none; cursor: pointer; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.fg > summary::-webkit-details-marker { display: none; }
+.fg > summary .label { color: var(--text); }
+.fg > summary .label::before { content: "+"; display: inline-block; width: 14px; color: var(--muted); font-family: var(--mono); }
+.fg[open] > summary .label::before { content: "−"; }
+.fg > summary .on { font: 600 10px var(--mono); color: var(--red); }
+.fg .hint { padding: 0 16px 8px; margin-top: -4px; font-size: 11.5px; color: var(--muted); }
+.opts { display: grid; grid-template-columns: 1fr 1fr; gap: 1px 10px; padding: 0 16px 14px; }
+.opts.wide { grid-template-columns: 1fr; }
+.opt { display: grid; grid-template-columns: 14px auto 1fr auto; align-items: center; gap: 7px; padding: 4px 0; cursor: pointer; font-size: 12.5px; min-width: 0; }
+.opt input { appearance: none; -webkit-appearance: none; margin: 0; width: 12px; height: 12px; border: 1px solid #555; background: #000; padding: 0; display: grid; place-items: center; cursor: pointer; }
+.opt input:checked { background: var(--red); border-color: var(--red); }
+.opt input:checked::after { content: ""; width: 4px; height: 4px; background: #fff; }
+.opt .sw { width: 10px; height: 10px; display: inline-block; border: 1px solid rgba(255,255,255,.18); }
+.opt .sw.none { display: none; }
+.opt .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.opt .nm i { font-style: normal; font: 600 9px var(--mono); color: var(--red); margin-left: 5px; letter-spacing: .04em; }
+.opt .ct { font: 11px var(--mono); color: var(--muted); }
+.opt.zero { opacity: .32; }
+.opt:hover .nm { color: #fff; }
+.rng { display: grid; grid-template-columns: 1fr 14px 1fr; align-items: center; gap: 4px; padding: 0 16px 14px; }
+.rng input { width: 100%; font-family: var(--mono); font-size: 12px; padding: 7px 8px; }
+.rng span { text-align: center; color: var(--muted); }
+.search { padding: 12px 16px 14px; border-bottom: 1px solid var(--line); }
+.search input { width: 100%; }
+
+/* ---------- main ---------- */
+.main { min-width: 0; padding: 22px clamp(16px, 2.5vw, 32px) 60px; display: grid; gap: 22px; align-content: start; }
+.load { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; }
+.load input { flex: 1 1 360px; min-width: 0; font-family: var(--mono); font-size: 13px; }
+.safe { margin: -12px 0 0; font-size: 12px; color: var(--muted); }
+.status { font: 12.5px var(--mono); color: var(--muted); min-height: 18px; }
+.status.err { color: var(--red); }
+
+.headline { display: grid; gap: 14px; }
+.headline[hidden] { display: none; }
+.headline h1 { font: 700 clamp(34px, 5vw, 58px)/0.95 var(--display); text-transform: uppercase; letter-spacing: .02em; margin: 4px 0 0; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.headline h1 span { color: var(--red); font-family: var(--mono); font-size: .62em; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+.tile { background: var(--bg); padding: 10px 12px; display: grid; gap: 2px; }
+.tile b { font: 600 22px var(--mono); }
+.rbar { display: flex; height: 6px; background: var(--panel-2); }
+.rbar i { display: block; height: 100%; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font: 11.5px var(--mono); color: var(--muted); }
+.legend em { font-style: normal; display: inline-flex; align-items: center; gap: 6px; }
+.legend em::before { content: ""; width: 8px; height: 8px; background: var(--c); }
+
+.resbar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 10px 0; }
+.resbar .count { font: 12px var(--mono); color: var(--muted); }
+.resbar .count b { color: var(--text); font-weight: 600; }
+.resbar .right { display: flex; gap: 8px; align-items: center; }
+.resbar select { font-size: 12px; padding: 7px 8px; }
+.only-mobile { display: none; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, 300px); gap: 20px; justify-content: start; }
+.slot { white-space: pre-line; width: 300px; height: 430px; border: 1px solid var(--line); background: repeating-linear-gradient(135deg, #070707 0 8px, #0b0b0b 8px 16px); display: grid; place-items: center; color: var(--muted); font: 11.5px var(--mono); text-align: center; padding: 16px; }
+.slot.live { border: 0; background: none; padding: 0; display: block; }
+.void { padding: 70px 0; display: grid; gap: 10px; }
+.void h2 { font: 700 clamp(30px, 5vw, 54px)/1 var(--display); text-transform: uppercase; margin: 0; }
+.void h2 span { color: var(--red); }
+.void p { margin: 0; color: var(--muted); max-width: 60ch; }
+
+@media (max-width: 900px) {
+  .lv { grid-template-columns: 1fr; }
+  .side { position: fixed; z-index: 30; top: 52px; left: 0; bottom: 0; width: min(340px, 92vw); height: auto; transform: translateX(-102%); transition: transform .18s ease-out; }
+  .side.open { transform: none; box-shadow: 20px 0 60px rgba(0,0,0,.8); }
+  .only-mobile { display: inline-flex; }
+  .grid { justify-content: center; }
+}
+@media (prefers-reduced-motion: reduce) { .side { transition: none; } }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../">DFK Tales</a>
+  <nav class="nav" aria-label="Pages">
+    <a href="./" aria-current="page">Legion Viewer</a>
+  </nav>
+</header>
+
+<div class="lv">
+  <aside class="side" id="side" aria-label="Filters">
+    <div class="side-head">
+      <div class="side-title">
+        <h2>Filters <b id="active-n" hidden>0</b></h2>
+        <button type="button" id="btn-reset" disabled>Reset</button>
+      </div>
+      <div class="seg-wrap">
+        <span class="label">Genes to match</span>
+        <div class="seg" role="group" aria-label="Genes to match">
+          <button type="button" id="scope-d" data-scope="d" aria-pressed="true">Dominant</button>
+          <button type="button" id="scope-all" data-scope="all" aria-pressed="false">D + R1–R3</button>
+        </div>
+      </div>
+    </div>
+    <div class="tabs" role="tablist" id="tabs"></div>
+    <div id="panels"><p class="side-empty">Load a legion to filter it.</p></div>
+  </aside>
+
+  <main class="main">
+    <form class="load" id="form">
+      <input id="addr" type="text" placeholder="Wallet address 0x…" autocomplete="off" spellcheck="false" aria-label="Wallet address">
+      <select id="chain" aria-label="Chain">
+        <option value="43114" selected>Avalanche C-Chain</option>
+        <option value="8217">Kaia</option>
+      </select>
+      <button type="submit" class="primary" id="btn-load">Load legion</button>
+      <button type="button" id="btn-wallet" hidden>Use my wallet</button>
+    </form>
+    <p class="safe">Read-only. "Use my wallet" asks for your address and nothing else: no signature, no transaction, no approval. If a wallet ever asks you to sign here, close it.</p>
+    <div class="status" id="status" role="status"></div>
+
+    <section class="headline" id="headline" hidden>
+      <div>
+        <div class="eyebrow" id="who"></div>
+        <h1>Legion <span id="total"></span></h1>
+      </div>
+      <div class="tiles" id="tiles"></div>
+      <div class="rbar" id="rbar" aria-hidden="true"></div>
+      <div class="legend" id="legend"></div>
+      <div class="resbar">
+        <span class="count" id="count"></span>
+        <div class="right">
+          <button type="button" class="only-mobile" id="btn-filters">Filters</button>
+          <label class="label" for="sort">Sort</label>
+          <select id="sort">
+            <option value="rarity">Rarity</option>
+            <option value="level">Level</option>
+            <option value="sum">Stat total</option>
+            <option value="trait">Trait score</option>
+            <option value="gen">Generation</option>
+            <option value="summons">Summons left</option>
+            <option value="id">ID</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <section class="void" id="void">
+      <div class="eyebrow">Legion Viewer</div>
+      <h2>Every hero.<br><span>Every gene.</span></h2>
+      <p>Paste a wallet and load it: all its heroes on the game's animated cards, with filters for class, genes, skills, stats, looks and gear. Click a card to flip it.</p>
+    </section>
+
+    <div class="grid" id="grid" aria-live="polite"></div>
+  </main>
+</div>
+
+<script type="module">
+import {
+  createDFKClient, ACTIVE_SKILLS, PASSIVE_SKILLS, HERO_CLASSES, PROFESSIONS, ELEMENTS, BACKGROUNDS, CRAFTING_PROFESSIONS,
+  STAT_BOOSTS, HAIR_COLORS, SKIN_COLORS, EYE_COLORS, APPENDAGE_COLORS, HEAD_APPENDAGES, BACK_APPENDAGES,
+  FEMALE_HAIR_STYLES, MALE_HAIR_STYLES, getClassTier,
+} from 'https://esm.sh/@defikingdoms/game-sdk@0.1.0?deps=ethers@5.8.0';
+import { createAnimatedHeroCard } from 'https://esm.sh/@defikingdoms/game-sdk@0.1.0/renderer?deps=ethers@5.8.0';
+
+/* ---------- vocab ---------- */
+const RARITY = ['common', 'uncommon', 'rare', 'legendary', 'mythic'];
+const REALMS = { serendale: 'Serendale 1.0', crystalvale: 'Crystalvale', serendale2: 'Serendale 2.0', sunderedisles: 'Sundered Isles', avalanche: 'Avalanche' };
+const STATS = [['strength', 'STR'], ['intelligence', 'INT'], ['wisdom', 'WIS'], ['luck', 'LCK'], ['agility', 'AGI'], ['vitality', 'VIT'], ['endurance', 'END'], ['dexterity', 'DEX']];
+const SKILLS = [['mining', 'Mining'], ['gardening', 'Gardening'], ['fishing', 'Fishing'], ['foraging', 'Foraging']];
+const SLOTS = [['weapon1Id', 'Weapon 1'], ['weapon2Id', 'Weapon 2'], ['offhand1Id', 'Offhand 1'], ['offhand2Id', 'Offhand 2'], ['armorId', 'Armor'], ['accessoryId', 'Accessory'], ['petId', 'Pet']];
+const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : '');
+const className = (c) => ({ darkKnight: 'Dark Knight', spellBow: 'SpellBow', dreadKnight: 'DreadKnight' })[c] || cap(c);
+const tierOf = (r) => (r < 16 ? 0 : r < 24 ? 1 : r < 28 ? 2 : 3);
+const tierCode = (r) => (r < 16 ? `B${r + 1}` : r < 24 ? `A${r - 15}` : r < 28 ? `E${r - 23}` : `X${r - 27}`);
+const TIER_TAG = ['', 'ADV', 'ELITE', 'EXALT'];
+const hex = (h) => (h ? `#${h}` : null);
+
+/* ---------- gene scope ---------- */
+let scope = 'd';
+const genes = (raw) => (scope === 'd' ? [raw.d] : [...new Set([raw.d, raw.r1, raw.r2, raw.r3])]);
+const sg = (k) => (h) => genes(h.statGenes.raw[k]);
+const vg = (k) => (h) => genes(h.visualGenes.raw[k]);
+const traitScore = (h) => ['active1', 'active2', 'passive1', 'passive2'].reduce((t, k) => t + tierOf(h.statGenes.raw[k].d), 0);
+const statSum = (h) => STATS.reduce((t, [k]) => t + h.stats[k], 0);
+
+/* ---------- filter definitions ---------- */
+const geneSet = (id, label, values, name, extra = {}) => ({ id, label, type: 'set', gene: true, values, name, order: 'key', ...extra });
+const skillName = (map) => (r) => map[r] || tierCode(r);
+const swatchName = (map) => (r) => tierCode(Number(r));
+const range = (id, label, get, extra = {}) => ({ id, label, type: 'range', get, ...extra });
+
+const TABS = [
+  { id: 'basics', label: 'Basics', groups: [
+    geneSet('class', 'Class', sg('class'), (r) => className(HERO_CLASSES[r]) || `#${r}`, { tag: (r) => TIER_TAG[tierOf(r)] }),
+    geneSet('subClass', 'Subclass', sg('subClass'), (r) => className(HERO_CLASSES[r]) || `#${r}`, { tag: (r) => TIER_TAG[tierOf(r)] }),
+    { id: 'tier', label: 'Class tier', type: 'set', values: (h) => [getClassTier(h.statGenes.raw.class.d)], name: cap, order: ['basic', 'advanced', 'elite', 'exalted'] },
+    { id: 'rarity', label: 'Rarity', type: 'set', values: (h) => [h.rarity], name: cap, order: RARITY, swatch: (r) => `var(--r-${r})` },
+    range('level', 'Level', (h) => h.level),
+    range('generation', 'Generation', (h) => h.generation),
+    range('summons', 'Summons left', (h) => h.summonsRemaining, { hint: '11 means unlimited' }),
+    { id: 'realm', label: 'Origin realm', type: 'set', values: (h) => [h.originRealm], name: (r) => REALMS[r] || r, order: Object.keys(REALMS), hint: 'From the ID: no prefix Serendale 1.0, 1… Crystalvale, 2… Serendale 2.0' },
+    { id: 'shiny', label: 'Shiny', type: 'set', values: (h) => [h.shiny ? 'yes' : 'no'], name: (v) => (v === 'yes' ? 'Shiny' : 'Not shiny'), order: ['yes', 'no'] },
+    geneSet('gender', 'Gender', vg('gender'), (r) => ({ 1: 'Male', 3: 'Female' })[r] || `#${r}`),
+    geneSet('element', 'Element', sg('element'), (r) => cap(ELEMENTS[r]) || `#${r}`),
+    geneSet('background', 'Background', vg('background'), (r) => cap(BACKGROUNDS[r]) || `#${r}`),
+  ] },
+  { id: 'attributes', label: 'Traits', groups: [
+    geneSet('active1', 'Active 1', sg('active1'), skillName(ACTIVE_SKILLS), { tag: (r) => TIER_TAG[tierOf(r)] }),
+    geneSet('active2', 'Active 2', sg('active2'), skillName(ACTIVE_SKILLS), { tag: (r) => TIER_TAG[tierOf(r)] }),
+    geneSet('passive1', 'Passive 1', sg('passive1'), skillName(PASSIVE_SKILLS), { tag: (r) => TIER_TAG[tierOf(r)] }),
+    geneSet('passive2', 'Passive 2', sg('passive2'), skillName(PASSIVE_SKILLS), { tag: (r) => TIER_TAG[tierOf(r)] }),
+    range('trait', 'Trait score', traitScore, { hint: 'Dominant traits: Advanced 1, Elite 2, Exalted 3' }),
+    geneSet('profession', 'Gathering profession', sg('profession'), (r) => cap(PROFESSIONS[r]) || `#${r}`),
+    geneSet('crafting1', 'Crafting 1', sg('crafting1'), (r) => CRAFTING_PROFESSIONS[r] || `#${r}`),
+    geneSet('crafting2', 'Crafting 2', sg('crafting2'), (r) => CRAFTING_PROFESSIONS[r] || `#${r}`),
+    geneSet('statBoost1', 'Stat boost 1', sg('statBoost1'), (r) => STAT_BOOSTS[r] || `#${r}`),
+    geneSet('statBoost2', 'Stat boost 2', sg('statBoost2'), (r) => STAT_BOOSTS[r] || `#${r}`),
+  ] },
+  { id: 'stats', label: 'Stats', groups: [
+    ...STATS.map(([k, l]) => range(`st-${k}`, l, (h) => h.stats[k])),
+    range('st-hp', 'HP', (h) => h.stats.hp),
+    range('st-mp', 'MP', (h) => h.stats.mp),
+    range('st-sum', 'Stat total', statSum, { hint: 'STR + INT + WIS + LCK + AGI + VIT + END + DEX' }),
+    ...SKILLS.map(([k, l]) => range(`sk-${k}`, `${l} skill`, (h) => h.skills[k], { closed: true })),
+    ...STATS.map(([k, l]) => range(`pg-${k}`, `${l} primary growth %`, (h) => h.primaryGrowth[k] / 100, { closed: true })),
+    ...STATS.map(([k, l]) => range(`sgr-${k}`, `${l} secondary growth %`, (h) => h.secondaryGrowth[k] / 100, { closed: true })),
+  ] },
+  { id: 'looks', label: 'Looks', groups: [
+    { id: 'hairStyle', label: 'Hair style', type: 'set', gene: true, wide: true,
+      values: (h) => genes(h.visualGenes.raw.hairStyle).map((r) => `${h.gender}:${r}`),
+      name: (k) => { const [g, r] = k.split(':'); return `${(g === 'female' ? FEMALE_HAIR_STYLES : MALE_HAIR_STYLES)[r] || `#${r}`} ${g === 'female' ? '♀' : '♂'}`; },
+      order: (a, b) => a.localeCompare(b, undefined, { numeric: true }) },
+    geneSet('hairColor', 'Hair color', vg('hairColor'), swatchName(HAIR_COLORS), { swatch: (r) => hex(HAIR_COLORS[r]) }),
+    geneSet('headAppendage', 'Head appendage', vg('headAppendage'), (r) => HEAD_APPENDAGES[r] || `#${r}`, { wide: true, tag: (r) => tierCode(Number(r)) }),
+    geneSet('appendageColor', 'Head appendage color', vg('appendageColor'), swatchName(APPENDAGE_COLORS), { swatch: (r) => hex(APPENDAGE_COLORS[r]) }),
+    geneSet('backAppendage', 'Back appendage', vg('backAppendage'), (r) => BACK_APPENDAGES[r] || `#${r}`, { wide: true, tag: (r) => tierCode(Number(r)) }),
+    geneSet('backAppendageColor', 'Back appendage color', vg('backAppendageColor'), swatchName(APPENDAGE_COLORS), { swatch: (r) => hex(APPENDAGE_COLORS[r]) }),
+    geneSet('skinColor', 'Skin color', vg('skinColor'), swatchName(SKIN_COLORS), { swatch: (r) => hex(SKIN_COLORS[r]) }),
+    geneSet('eyeColor', 'Eye color', vg('eyeColor'), swatchName(EYE_COLORS), { swatch: (r) => hex(EYE_COLORS[r]) }),
+  ] },
+  { id: 'gear', label: 'Gear', groups: SLOTS.map(([k, l]) => ({
+    id: `eq-${k}`, label: l, type: 'set', values: (h) => [h.equipment && h.equipment[k] ? 'on' : 'off'],
+    name: (v) => (v === 'on' ? 'Equipped' : 'Empty'), order: ['on', 'off'] })) },
+];
+const GROUPS = TABS.flatMap((t) => t.groups.map((g) => ({ ...g, tab: t.id })));
+
+/* ---------- state ---------- */
+const $ = (s) => document.querySelector(s);
+const statusEl = $('#status');
+let heroes = [];
+let cache = new Map();        // hero id -> { groupId: [keys] | number }
+const sel = {};                // set groups: Set of keys
+const rng = {};                // range groups: { min, max }
+let query = '';
+let activeTab = 'basics';
+const cards = new Map();
+
+function setStatus(t, err = false) { statusEl.textContent = t; statusEl.classList.toggle('err', err); }
+const isAddr = (a) => /^0x[0-9a-fA-F]{40}$/.test(a.trim());
+const short = (a) => `${a.slice(0, 6)}…${a.slice(-4)}`;
+const store = { get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} } };
+
+function buildCache() {
+  cache = new Map();
+  for (const h of heroes) {
+    const row = {};
+    for (const g of GROUPS) row[g.id] = g.type === 'set' ? g.values(h).map(String) : g.get(h);
+    cache.set(h.id, row);
+  }
+}
+
+function matches(h, skip) {
+  const row = cache.get(h.id);
+  if (query) {
+    const q = query.toLowerCase();
+    if (!(h.name.toLowerCase().includes(q) || h.id.includes(q) || String(h.displayId).includes(q))) return false;
+  }
+  for (const g of GROUPS) {
+    if (g.id === skip) continue;
+    if (g.type === 'set') {
+      const s = sel[g.id];
+      if (s && s.size && !row[g.id].some((v) => s.has(v))) return false;
+    } else {
+      const r = rng[g.id];
+      if (r) {
+        const v = row[g.id];
+        if (r.min != null && v < r.min) return false;
+        if (r.max != null && v > r.max) return false;
+      }
+    }
+  }
+  return true;
+}
+
+const activeCount = () => GROUPS.reduce((n, g) => n + (g.type === 'set' ? (sel[g.id] && sel[g.id].size ? 1 : 0) : (rng[g.id] && (rng[g.id].min != null || rng[g.id].max != null) ? 1 : 0)), 0) + (query ? 1 : 0);
+
+/* ---------- sidebar ---------- */
+function orderKeys(g, keys) {
+  if (Array.isArray(g.order)) return [...keys].sort((a, b) => g.order.indexOf(a) - g.order.indexOf(b));
+  if (typeof g.order === 'function') return [...keys].sort(g.order);
+  return [...keys].sort((a, b) => Number(a) - Number(b));
+}
+
+function buildSidebar() {
+  const tabs = $('#tabs');
+  tabs.replaceChildren(...TABS.map((t) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.id = `tab-${t.id}`; b.setAttribute('role', 'tab'); b.dataset.tab = t.id;
+    b.setAttribute('aria-selected', String(t.id === activeTab));
+    b.textContent = t.label;
+    const d = document.createElement('span'); d.className = 'dot'; d.hidden = true; b.append(d);
+    b.addEventListener('click', () => { activeTab = t.id; syncTabs(); });
+    return b;
+  }));
+  const panels = $('#panels');
+  panels.replaceChildren(...TABS.map((t) => {
+    const p = document.createElement('div');
+    p.className = 'panel'; p.id = `panel-${t.id}`; p.setAttribute('role', 'tabpanel');
+    if (t.id === 'basics') {
+      const s = document.createElement('div'); s.className = 'search';
+      const i = document.createElement('input'); i.type = 'search'; i.id = 'q'; i.placeholder = 'Name or ID'; i.setAttribute('aria-label', 'Search name or ID'); i.value = query;
+      i.addEventListener('input', () => { query = i.value.trim(); schedule(); });
+      s.append(i); p.append(s);
+    }
+    for (const g of t.groups) p.append(buildGroup(g));
+    return p;
+  }));
+  syncTabs();
+}
+
+function buildGroup(g) {
+  const det = document.createElement('details');
+  det.className = 'fg'; det.dataset.group = g.id; det.open = !g.closed;
+  const sum = document.createElement('summary');
+  const lab = document.createElement('span'); lab.className = 'label'; lab.textContent = g.label;
+  const on = document.createElement('span'); on.className = 'on';
+  sum.append(lab, on); det.append(sum);
+  if (g.hint) { const h = document.createElement('div'); h.className = 'hint'; h.textContent = g.hint; det.append(h); }
+  if (g.type === 'set') {
+    const box = document.createElement('div'); box.className = `opts${g.wide ? ' wide' : ''}`;
+    const all = new Set(); for (const row of cache.values()) row[g.id].forEach((v) => all.add(v));
+    for (const key of orderKeys(g, all)) {
+      const l = document.createElement('label'); l.className = 'opt'; l.dataset.key = key;
+      const c = document.createElement('input'); c.type = 'checkbox'; c.id = `f-${g.id}-${key}`.replace(/[^a-zA-Z0-9_-]/g, '_'); c.value = key;
+      c.checked = !!(sel[g.id] && sel[g.id].has(key));
+      c.addEventListener('change', () => {
+        sel[g.id] = sel[g.id] || new Set();
+        if (c.checked) sel[g.id].add(key); else sel[g.id].delete(key);
+        schedule();
+      });
+      const sw = document.createElement('span'); const col = g.swatch ? g.swatch(key) : null;
+      sw.className = col ? 'sw' : 'sw none'; if (col) sw.style.background = col;
+      const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = g.name(key); nm.title = g.name(key);
+      const tag = g.tag ? g.tag(key) : ''; if (tag) { const i = document.createElement('i'); i.textContent = tag; nm.append(i); }
+      const ct = document.createElement('span'); ct.className = 'ct';
+      l.append(c, sw, nm, ct); box.append(l);
+    }
+    det.append(box);
+  } else {
+    let lo = Infinity, hi = -Infinity;
+    for (const row of cache.values()) { const v = row[g.id]; if (v < lo) lo = v; if (v > hi) hi = v; }
+    const fmt = (v) => (Number.isFinite(v) ? String(Math.round(v * 100) / 100) : '');
+    const box = document.createElement('div'); box.className = 'rng';
+    const mk = (which, ph) => {
+      const i = document.createElement('input'); i.type = 'number'; i.step = 'any'; i.inputMode = 'decimal';
+      i.id = `f-${g.id}-${which}`; i.placeholder = ph; i.setAttribute('aria-label', `${g.label} ${which}`);
+      const cur = rng[g.id] && rng[g.id][which]; if (cur != null) i.value = cur;
+      i.addEventListener('input', () => {
+        rng[g.id] = rng[g.id] || { min: null, max: null };
+        rng[g.id][which] = i.value === '' ? null : Number(i.value);
+        schedule();
+      });
+      return i;
+    };
+    const dash = document.createElement('span'); dash.textContent = '–';
+    box.append(mk('min', `min ${fmt(lo)}`), dash, mk('max', `max ${fmt(hi)}`));
+    det.append(box);
+  }
+  return det;
+}
+
+function syncTabs() {
+  document.querySelectorAll('#tabs [role=tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === activeTab)));
+  TABS.forEach((t) => { const p = document.getElementById(`panel-${t.id}`); if (p) p.hidden = t.id !== activeTab; });
+}
+
+function updateFacets() {
+  for (const g of GROUPS) {
+    const det = document.querySelector(`.fg[data-group="${g.id}"]`);
+    if (!det) continue;
+    let active = false;
+    if (g.type === 'set') {
+      const counts = new Map();
+      for (const h of heroes) if (matches(h, g.id)) for (const v of cache.get(h.id)[g.id]) counts.set(v, (counts.get(v) || 0) + 1);
+      det.querySelectorAll('.opt').forEach((l) => {
+        const n = counts.get(l.dataset.key) || 0;
+        l.querySelector('.ct').textContent = n;
+        l.classList.toggle('zero', n === 0);
+      });
+      active = !!(sel[g.id] && sel[g.id].size);
+      det.querySelector('.on').textContent = active ? `${sel[g.id].size} ON` : '';
+    } else {
+      const r = rng[g.id];
+      active = !!(r && (r.min != null || r.max != null));
+      det.querySelector('.on').textContent = active ? 'ON' : '';
+    }
+  }
+  const n = activeCount();
+  $('#active-n').hidden = n === 0; $('#active-n').textContent = n;
+  $('#btn-reset').disabled = n === 0;
+  for (const t of TABS) {
+    const on = t.groups.some((g) => (g.type === 'set' ? sel[g.id] && sel[g.id].size : rng[g.id] && (rng[g.id].min != null || rng[g.id].max != null))) || (t.id === 'basics' && !!query);
+    const dot = document.querySelector(`#tab-${t.id} .dot`); if (dot) dot.hidden = !on;
+  }
+}
+
+/* ---------- grid ---------- */
+const SORTS = {
+  rarity: (a, b) => RARITY.indexOf(b.rarity) - RARITY.indexOf(a.rarity) || b.level - a.level,
+  level: (a, b) => b.level - a.level || RARITY.indexOf(b.rarity) - RARITY.indexOf(a.rarity),
+  sum: (a, b) => statSum(b) - statSum(a),
+  trait: (a, b) => traitScore(b) - traitScore(a) || RARITY.indexOf(b.rarity) - RARITY.indexOf(a.rarity),
+  gen: (a, b) => a.generation - b.generation || RARITY.indexOf(b.rarity) - RARITY.indexOf(a.rarity),
+  summons: (a, b) => b.summonsRemaining - a.summonsRemaining,
+  id: (a, b) => (BigInt(a.id) < BigInt(b.id) ? -1 : 1),
+};
+
+const io = new IntersectionObserver((entries) => {
+  for (const e of entries) {
+    const entry = cards.get(e.target.dataset.id);
+    if (!entry) continue;
+    if (e.isIntersecting) {
+      if (!entry.handle) {
+        entry.handle = createAnimatedHeroCard(entry.hero, { renderer: {} });
+        entry.slot.replaceChildren(entry.handle.element);
+        entry.slot.classList.add('live');
+        entry.handle.renderer.then((r) => { entry.renderer = r; });
+      } else if (entry.renderer) entry.renderer.resume();
+    } else if (entry.renderer) entry.renderer.pause();
+  }
+}, { rootMargin: '400px 0px' });
+
+function renderGrid() {
+  const list = heroes.filter((h) => matches(h, null)).sort(SORTS[$('#sort').value]);
+  const keep = new Set(list.map((h) => h.id));
+  for (const [id, entry] of cards) if (!keep.has(id)) { io.unobserve(entry.slot); entry.slot.remove(); }
+  const frag = document.createDocumentFragment();
+  for (const h of list) {
+    let entry = cards.get(h.id);
+    if (!entry) {
+      const slot = document.createElement('div');
+      slot.className = 'slot'; slot.dataset.id = h.id; slot.textContent = `${h.name}\n#${h.displayId}`;
+      entry = { hero: h, slot, handle: null, renderer: null };
+      cards.set(h.id, entry);
+    }
+    frag.append(entry.slot);
+    io.observe(entry.slot);
+  }
+  const grid = $('#grid');
+  grid.replaceChildren(frag);
+  $('#count').innerHTML = '';
+  const b = document.createElement('b'); b.textContent = list.length;
+  $('#count').append('Showing ', b, ` of ${heroes.length}`);
+}
+
+let timer = 0;
+function schedule() { clearTimeout(timer); timer = setTimeout(() => { renderGrid(); updateFacets(); }, 120); }
+
+/* ---------- summary ---------- */
+function renderHeadline(addr, chainName) {
+  $('#who').textContent = `${short(addr)} · ${chainName}`;
+  $('#total').textContent = heroes.length;
+  const n = (f) => heroes.filter(f).length;
+  const tiles = [
+    ['Mythic', n((h) => h.rarity === 'mythic')],
+    ['Legendary', n((h) => h.rarity === 'legendary')],
+    ['Shiny', n((h) => h.shiny)],
+    ['Gen 0', n((h) => h.generation === 0)],
+    ['Exalted', n((h) => getClassTier(h.statGenes.raw.class.d) === 'exalted')],
+    ['Elite', n((h) => getClassTier(h.statGenes.raw.class.d) === 'elite')],
+    ['Max level', Math.max(...heroes.map((h) => h.level))],
+    ['Avg level', (heroes.reduce((t, h) => t + h.level, 0) / heroes.length).toFixed(1)],
+  ];
+  $('#tiles').replaceChildren(...tiles.map(([k, v]) => {
+    const d = document.createElement('div'); d.className = 'tile';
+    const s = document.createElement('span'); s.className = 'label'; s.textContent = k;
+    const b = document.createElement('b'); b.textContent = v;
+    d.append(s, b); return d;
+  }));
+  const counts = RARITY.map((r) => n((h) => h.rarity === r));
+  $('#rbar').replaceChildren(...RARITY.map((r, i) => { const e = document.createElement('i'); e.style.width = `${(counts[i] / heroes.length) * 100}%`; e.style.background = `var(--r-${r})`; return e; }));
+  $('#legend').replaceChildren(...RARITY.map((r, i) => { const e = document.createElement('em'); e.style.setProperty('--c', `var(--r-${r})`); e.textContent = `${cap(r)} ${counts[i]}`; return e; }));
+  $('#headline').hidden = false;
+  $('#void').hidden = true;
+}
+
+/* ---------- loading ---------- */
+let run = 0;
+async function load() {
+  const addr = $('#addr').value.trim();
+  if (!isAddr(addr)) { setStatus('That is not a wallet address: 0x followed by 40 characters.', true); return; }
+  const chainId = Number($('#chain').value);
+  const my = ++run;
+  $('#btn-load').disabled = true;
+  try {
+    const dfk = createDFKClient({ chainId });
+    setStatus('Looking up the legion…');
+    const ids = await dfk.heroes.idsByOwner(addr, { includeListed: true });
+    if (my !== run) return;
+    if (!ids.length) { setStatus('No heroes for this address on this chain.'); return; }
+    const out = [];
+    for (let i = 0; i < ids.length; i += 60) {
+      setStatus(`Reading heroes ${Math.min(i + 60, ids.length)} / ${ids.length}`);
+      out.push(...(await dfk.heroes.getMany(ids.slice(i, i + 60))));
+      if (my !== run) return;
+    }
+    for (const entry of cards.values()) { io.unobserve(entry.slot); if (entry.handle && entry.handle.destroy) entry.handle.destroy(); }
+    cards.clear();
+    heroes = out;
+    for (const k of Object.keys(sel)) delete sel[k];
+    for (const k of Object.keys(rng)) delete rng[k];
+    query = '';
+    buildCache();
+    buildSidebar();
+    renderHeadline(addr, $('#chain').selectedOptions[0].textContent);
+    renderGrid();
+    updateFacets();
+    store.set('dfk-tales:addr', addr); store.set('dfk-tales:chain', String(chainId));
+    setStatus(`${heroes.length} heroes loaded.`);
+  } catch (e) {
+    console.error(e);
+    if (my === run) setStatus(`Could not read the chain: ${e && e.message ? e.message.slice(0, 140) : e}. Try again in a moment.`, true);
+  } finally {
+    if (my === run) $('#btn-load').disabled = false;
+  }
+}
+
+/* ---------- wiring ---------- */
+$('#form').addEventListener('submit', (e) => { e.preventDefault(); load(); });
+$('#sort').addEventListener('change', renderGrid);
+$('#btn-reset').addEventListener('click', () => {
+  for (const k of Object.keys(sel)) delete sel[k];
+  for (const k of Object.keys(rng)) delete rng[k];
+  query = '';
+  buildSidebar(); renderGrid(); updateFacets();
+});
+document.querySelectorAll('[data-scope]').forEach((b) => b.addEventListener('click', () => {
+  scope = b.dataset.scope;
+  document.querySelectorAll('[data-scope]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  if (!heroes.length) return;
+  for (const g of GROUPS) if (g.gene) delete sel[g.id];
+  buildCache(); buildSidebar(); renderGrid(); updateFacets();
+}));
+$('#btn-filters').addEventListener('click', () => $('#side').classList.toggle('open'));
+if (window.ethereum) {
+  const b = $('#btn-wallet');
+  b.hidden = false;
+  b.addEventListener('click', async () => {
+    try {
+      const [a] = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      if (a) { $('#addr').value = a; load(); }
+    } catch (e) { setStatus('The wallet did not share an address. You can paste it instead.', true); }
+  });
+}
+const lastAddr = store.get('dfk-tales:addr');
+if (lastAddr) $('#addr').value = lastAddr;
+const lastChain = store.get('dfk-tales:chain');
+if (lastChain && [...$('#chain').options].some((o) => o.value === lastChain)) $('#chain').value = lastChain;
+setStatus(lastAddr ? 'Last wallet is filled in. Press Load legion.' : 'Paste a wallet address to begin.');
+</script>
+</body>
+</html>

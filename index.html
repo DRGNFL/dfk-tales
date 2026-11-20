@@ -1,357 +1,51 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Caserma DFK</title>
+<title>DFK Tales</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Poppins:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="assets/tales.css">
 <style>
-:root {
-  /* Same world as the hero page: the mythic card's violet, its gold, rarity colors only where they mean rarity. Header, summary, then the wall of cards. */
-  --ink: #16111f;
-  --panel: #211a2e;
-  --panel-2: #2b2240;
-  --line: #3f3359;
-  --text: #f2ebdf;
-  --muted: #a99fbd;
-  --gold: #e8bd5f;
-  --bad: #f06a38;
-  --display: "Lora", Georgia, "Times New Roman", serif;
-  --body: "Poppins", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --r-common: #c9c3d6; --r-uncommon: #5fd17a; --r-rare: #4aa8ff; --r-legendary: #ff9f3a; --r-mythic: #c77dff;
-  color-scheme: dark;
-}
-* { box-sizing: border-box; }
-html, body { margin: 0; background: var(--ink); color: var(--text); }
-body { font-family: var(--body); font-size: 15px; line-height: 1.5; padding: 28px clamp(16px, 4vw, 40px) 48px; }
-.wrap { max-width: 1320px; margin: 0 auto; display: grid; gap: 20px; }
-
-header { display: grid; gap: 10px; }
-.eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-h1 { font-family: var(--display); font-weight: 700; font-size: clamp(30px, 4.6vw, 44px); line-height: 1.1; margin: 0; text-wrap: balance; }
-.lede { margin: 0; color: var(--muted); max-width: 68ch; font-size: 14px; }
-
-.connect { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.connect input, .connect select, .tools input, .tools select {
-  font: inherit; font-size: 14px; color: var(--text); background: var(--panel); border: 1px solid var(--line);
-  border-radius: 8px; padding: 8px 12px;
-}
-.connect input { flex: 1 1 340px; min-width: 0; font-variant-numeric: tabular-nums; }
-.connect input:focus, .connect select:focus, .tools input:focus, .tools select:focus { outline: 2px solid var(--gold); outline-offset: 1px; }
-button { font: inherit; font-size: 14px; color: var(--text); cursor: pointer; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; }
-button:hover { border-color: var(--muted); }
-button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
-button.primary { background: var(--gold); border-color: var(--gold); color: #1d1608; font-weight: 600; }
-button[aria-pressed="true"] { background: var(--gold); border-color: var(--gold); color: #1d1608; font-weight: 600; }
-button:disabled { opacity: .5; cursor: default; }
-.safe { font-size: 12.5px; color: var(--muted); margin: 0; }
-.status { font-size: 13.5px; color: var(--muted); min-height: 21px; font-variant-numeric: tabular-nums; }
-.status.err { color: var(--bad); }
-
-.summary { display: none; gap: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
-.summary.on { display: grid; }
-.sum-top { display: flex; flex-wrap: wrap; gap: 6px 24px; align-items: baseline; }
-.sum-top h2 { font-family: var(--display); font-size: 22px; margin: 0; }
-.sum-top .addr { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.figs { display: flex; flex-wrap: wrap; gap: 8px; }
-.fig { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px; display: grid; min-width: 88px; }
-.fig span { font-size: 11.5px; color: var(--muted); letter-spacing: .04em; }
-.fig b { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.rbar { display: flex; height: 10px; border-radius: 999px; overflow: hidden; background: var(--panel-2); }
-.rbar i { display: block; height: 100%; }
-.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.legend em { font-style: normal; display: inline-flex; align-items: center; gap: 6px; }
-.legend em::before { content: ""; width: 9px; height: 9px; border-radius: 2px; background: var(--c); }
-
-.tools { display: none; flex-wrap: wrap; gap: 8px; align-items: center; }
-.tools.on { display: flex; }
-.chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.chips button { font-size: 13px; padding: 5px 11px; border-radius: 999px; }
-.chips button .n { color: var(--muted); margin-left: 5px; font-variant-numeric: tabular-nums; }
-.chips button[aria-pressed="true"] .n { color: #3a2c10; }
-.tools input { flex: 0 1 220px; }
-
-.grid { display: grid; grid-template-columns: repeat(auto-fill, 300px); gap: 22px; justify-content: center; }
-.slot { width: 300px; height: 430px; border-radius: 14px; background: var(--panel); border: 1px dashed var(--line); display: grid; place-items: center; color: var(--muted); font-size: 13px; text-align: center; padding: 16px; }
-.slot.live { background: none; border: 0; padding: 0; display: block; }
-.empty { color: var(--muted); font-size: 14px; padding: 32px 0; text-align: center; }
-
-footer { font-size: 12.5px; color: var(--muted); max-width: 76ch; display: grid; gap: 4px; }
-footer p { margin: 0; }
+.home { max-width: 1100px; margin: 0 auto; padding: 72px 20px 64px; display: grid; gap: 48px; }
+.hero h1 { font-family: var(--display); font-weight: 700; font-size: clamp(48px, 9vw, 112px); line-height: .9; letter-spacing: .02em; text-transform: uppercase; margin: 14px 0 18px; }
+.hero h1 span { color: var(--red); }
+.hero p { margin: 0; color: var(--muted); max-width: 56ch; font-size: 16px; }
+.pages { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+.tile { background: var(--bg); padding: 22px 22px 24px; text-decoration: none; display: grid; gap: 10px; min-height: 180px; align-content: start; }
+.tile:hover { background: var(--panel-2); }
+.tile .num { font-family: var(--mono); font-size: 12px; color: var(--red); }
+.tile h2 { font-family: var(--display); font-size: 26px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; margin: 0; }
+.tile p { margin: 0; color: var(--muted); }
+.tile .go { font-family: var(--display); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; margin-top: 8px; }
+.tile .go::after { content: " →"; color: var(--red); }
+footer { color: var(--muted); font-size: 12px; border-top: 1px solid var(--line); padding-top: 16px; }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <div class="eyebrow">DeFi Kingdoms · lettura dalla catena</div>
-    <h1>Caserma</h1>
-    <p class="lede">Tutti gli eroi di un wallet, con le carte e le animazioni del gioco. Clicca una carta per girarla.</p>
-    <form class="connect" id="form">
-      <input id="addr" name="addr" type="text" placeholder="Indirizzo del wallet, 0x…" autocomplete="off" spellcheck="false" aria-label="Indirizzo del wallet">
-      <select id="chain" aria-label="Catena">
-        <option value="43114" selected>Avalanche C-Chain</option>
-        <option value="8217">Kaia</option>
-      </select>
-      <button type="submit" class="primary" id="btn-show">Mostra l'armata</button>
-      <button type="button" id="btn-wallet" hidden>Prendi l'indirizzo dal wallet</button>
-    </form>
-    <p class="safe">Il sito legge solo dati pubblici. Il pulsante del wallet chiede l'indirizzo e basta: nessuna firma, nessuna transazione, nessun permesso sui token.</p>
-    <div class="status" id="status" role="status"></div>
-  </header>
-
-  <section class="summary" id="summary" aria-label="Riepilogo">
-    <div class="sum-top">
-      <h2 id="sum-name">Armata</h2>
-      <span class="addr" id="sum-addr"></span>
-    </div>
-    <div class="figs" id="figs"></div>
-    <div class="rbar" id="rbar" aria-hidden="true"></div>
-    <div class="legend" id="legend"></div>
+<header class="topbar">
+  <a class="brand" href="./">DFK Tales</a>
+  <nav class="nav" aria-label="Pages">
+    <a href="legion/">Legion Viewer</a>
+  </nav>
+</header>
+<main class="home">
+  <section class="hero">
+    <div class="eyebrow">DeFi Kingdoms · read straight from the chain</div>
+    <h1>DFK <span>Tales</span></h1>
+    <p>Tools for the heroes of Gaia, built on the game's own art and data.</p>
   </section>
-
-  <section class="tools" id="tools" aria-label="Filtri">
-    <div class="chips" id="class-chips" role="group" aria-label="Classe"></div>
-    <input id="q" type="search" placeholder="Cerca nome o ID" aria-label="Cerca nome o ID">
-    <select id="sort" aria-label="Ordina">
-      <option value="rarity">Rarità</option>
-      <option value="level">Livello</option>
-      <option value="score">Somma statistiche</option>
-      <option value="gen">Generazione</option>
-      <option value="id">ID</option>
-    </select>
+  <section class="pages" aria-label="Pages">
+    <a class="tile" href="legion/">
+      <span class="num">01</span>
+      <h2>Legion Viewer</h2>
+      <p>Every hero in a wallet, on the game's animated cards. Filter by class, genes, skills, stats, looks and gear.</p>
+      <span class="go">Open</span>
+    </a>
   </section>
-
-  <main class="grid" id="grid" aria-live="polite"></main>
-
-  <footer>
-    <p>Carte e animazioni: @defikingdoms/game-sdk 0.1.0, caricato da esm.sh e jsDelivr. I dati arrivano dai nodi pubblici della catena, direttamente dal tuo browser.</p>
-    <p>Equipaggiamento non disegnato: ogni eroe tiene l'arma della sua classe.</p>
-  </footer>
-</div>
-
-<script type="module">
-import { createDFKClient } from 'https://esm.sh/@defikingdoms/game-sdk@0.1.0?deps=ethers@5.8.0';
-import { createAnimatedHeroCard } from 'https://esm.sh/@defikingdoms/game-sdk@0.1.0/renderer?deps=ethers@5.8.0';
-
-const RARITY = ['common', 'uncommon', 'rare', 'legendary', 'mythic'];
-const RARITY_IT = { common: 'Comune', uncommon: 'Non comune', rare: 'Raro', legendary: 'Leggendario', mythic: 'Mitico' };
-const CLASS_IT = {
-  warrior: 'Warrior', knight: 'Knight', thief: 'Thief', archer: 'Archer', priest: 'Priest', wizard: 'Wizard', monk: 'Monk',
-  pirate: 'Pirate', berserker: 'Berserker', seer: 'Seer', legionnaire: 'Legionnaire', scholar: 'Scholar', paladin: 'Paladin',
-  darkKnight: 'Dark Knight', summoner: 'Summoner', ninja: 'Ninja', shapeshifter: 'Shapeshifter', bard: 'Bard',
-  dragoon: 'Dragoon', sage: 'Sage', spellBow: 'SpellBow', dreadKnight: 'Dreadknight',
-};
-const $ = (s) => document.querySelector(s);
-const statusEl = $('#status');
-const grid = $('#grid');
-
-let heroes = [];
-let filterClass = null;
-const cards = new Map(); // hero id -> { slot, handle, renderer }
-
-function setStatus(text, err = false) {
-  statusEl.textContent = text;
-  statusEl.classList.toggle('err', err);
-}
-
-const isAddr = (a) => /^0x[0-9a-fA-F]{40}$/.test(a.trim());
-const short = (a) => `${a.slice(0, 6)}…${a.slice(-4)}`;
-const statSum = (h) => ['strength', 'intelligence', 'wisdom', 'luck', 'agility', 'vitality', 'endurance', 'dexterity'].reduce((t, k) => t + (h.stats[k] || 0), 0);
-const label = (c) => CLASS_IT[c] || (c ? c[0].toUpperCase() + c.slice(1) : '?');
-
-// Wallet: only asks for the address. No signature, no chain switch, no approval.
-if (window.ethereum) {
-  const b = $('#btn-wallet');
-  b.hidden = false;
-  b.addEventListener('click', async () => {
-    try {
-      const [a] = await window.ethereum.request({ method: 'eth_requestAccounts' });
-      if (a) { $('#addr').value = a; load(); }
-    } catch (e) {
-      setStatus('Il wallet non ha dato l\'indirizzo. Puoi incollarlo a mano.', true);
-    }
-  });
-}
-
-$('#form').addEventListener('submit', (e) => { e.preventDefault(); load(); });
-
-let run = 0;
-async function load() {
-  const addr = $('#addr').value.trim();
-  if (!isAddr(addr)) { setStatus('Serve un indirizzo che inizi con 0x e abbia 40 caratteri dopo.', true); return; }
-  const chainId = Number($('#chain').value);
-  const my = ++run;
-  clearGrid();
-  $('#summary').classList.remove('on');
-  $('#tools').classList.remove('on');
-  $('#btn-show').disabled = true;
-  try {
-    const dfk = createDFKClient({ chainId });
-    setStatus('Cerco gli eroi del wallet…');
-    const [ids, profile] = await Promise.all([
-      dfk.heroes.idsByOwner(addr, { includeListed: true }),
-      dfk.profiles.get(addr).catch(() => null),
-    ]);
-    if (my !== run) return;
-    if (!ids.length) { setStatus('Nessun eroe su questa catena per questo indirizzo.'); return; }
-    const out = [];
-    for (let i = 0; i < ids.length; i += 60) {
-      setStatus(`Leggo gli eroi: ${Math.min(i + 60, ids.length)} di ${ids.length}`);
-      out.push(...(await dfk.heroes.getMany(ids.slice(i, i + 60))));
-      if (my !== run) return;
-    }
-    heroes = out;
-    filterClass = null;
-    renderSummary(addr, profile, $('#chain').selectedOptions[0].textContent);
-    renderChips();
-    renderGrid();
-    setStatus(`${heroes.length} eroi letti.`);
-  } catch (e) {
-    console.error(e);
-    if (my === run) setStatus(`Lettura non riuscita: ${e && e.message ? e.message.slice(0, 140) : e}. Riprova tra poco.`, true);
-  } finally {
-    if (my === run) $('#btn-show').disabled = false;
-  }
-}
-
-function renderSummary(addr, profile, chainName) {
-  const name = profile && profile.name ? profile.name : 'Armata';
-  $('#sum-name').textContent = profile && profile.name ? `L'armata di ${name}` : 'Armata';
-  $('#sum-addr').textContent = `${short(addr)} · ${chainName}`;
-  const levels = heroes.reduce((t, h) => t + h.level, 0);
-  const figs = [
-    ['Eroi', heroes.length],
-    ['Livello medio', (levels / heroes.length).toFixed(1)],
-    ['Livello max', Math.max(...heroes.map((h) => h.level))],
-    ['Gen 0', heroes.filter((h) => h.generation === 0).length],
-    ['Shiny', heroes.filter((h) => h.shiny).length],
-    ['Classi', new Set(heroes.map((h) => h.class)).size],
-  ];
-  $('#figs').replaceChildren(...figs.map(([k, v]) => {
-    const d = document.createElement('div'); d.className = 'fig';
-    const s = document.createElement('span'); s.textContent = k;
-    const b = document.createElement('b'); b.textContent = v;
-    d.append(s, b); return d;
-  }));
-  const counts = RARITY.map((r) => heroes.filter((h) => h.rarity === r).length);
-  $('#rbar').replaceChildren(...RARITY.map((r, i) => {
-    const el = document.createElement('i');
-    el.style.width = `${(counts[i] / heroes.length) * 100}%`;
-    el.style.background = `var(--r-${r})`;
-    return el;
-  }));
-  $('#legend').replaceChildren(...RARITY.map((r, i) => {
-    const em = document.createElement('em');
-    em.style.setProperty('--c', `var(--r-${r})`);
-    em.textContent = `${RARITY_IT[r]} ${counts[i]}`;
-    return em;
-  }));
-  $('#summary').classList.add('on');
-}
-
-function renderChips() {
-  const byClass = {};
-  for (const h of heroes) byClass[h.class] = (byClass[h.class] || 0) + 1;
-  const wrap = $('#class-chips');
-  const make = (cls, text, n) => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.id = `cls-${cls || 'all'}`;
-    b.setAttribute('aria-pressed', String(filterClass === cls));
-    b.append(text);
-    const c = document.createElement('span'); c.className = 'n'; c.textContent = n; b.append(c);
-    b.addEventListener('click', () => { filterClass = cls; renderChips(); renderGrid(); });
-    return b;
-  };
-  wrap.replaceChildren(
-    make(null, 'Tutti', heroes.length),
-    ...Object.entries(byClass).sort((a, b) => b[1] - a[1]).map(([c, n]) => make(c, label(c), n)),
-  );
-  $('#tools').classList.add('on');
-}
-
-function sorted(list) {
-  const k = $('#sort').value;
-  const by = {
-    rarity: (a, b) => RARITY.indexOf(b.rarity) - RARITY.indexOf(a.rarity) || b.level - a.level,
-    level: (a, b) => b.level - a.level || RARITY.indexOf(b.rarity) - RARITY.indexOf(a.rarity),
-    score: (a, b) => statSum(b) - statSum(a),
-    gen: (a, b) => a.generation - b.generation || RARITY.indexOf(b.rarity) - RARITY.indexOf(a.rarity),
-    id: (a, b) => (BigInt(a.id) < BigInt(b.id) ? -1 : 1),
-  }[k];
-  return [...list].sort(by);
-}
-
-function visible() {
-  const q = $('#q').value.trim().toLowerCase();
-  return sorted(heroes.filter((h) =>
-    (!filterClass || h.class === filterClass) &&
-    (!q || h.name.toLowerCase().includes(q) || h.id.includes(q) || String(h.displayId).includes(q))));
-}
-
-// Cards are built only when they come near the screen, and paused when they leave it.
-const io = new IntersectionObserver((entries) => {
-  for (const e of entries) {
-    const entry = cards.get(e.target.dataset.id);
-    if (!entry) continue;
-    if (e.isIntersecting) {
-      if (!entry.handle) mountCard(entry);
-      else entry.renderer && entry.renderer.resume();
-    } else if (entry.renderer) entry.renderer.pause();
-  }
-}, { rootMargin: '300px 0px' });
-
-function mountCard(entry) {
-  const h = entry.hero;
-  const handle = createAnimatedHeroCard(h, { renderer: {} });
-  entry.handle = handle;
-  entry.slot.replaceChildren(handle.element);
-  entry.slot.classList.add('live');
-  handle.renderer.then((r) => { entry.renderer = r; });
-}
-
-function clearGrid() {
-  for (const entry of cards.values()) {
-    io.unobserve(entry.slot);
-    if (entry.handle && entry.handle.destroy) entry.handle.destroy();
-  }
-  cards.clear();
-  grid.replaceChildren();
-}
-
-function renderGrid() {
-  const list = visible();
-  // Reuse built cards; only reorder the slots.
-  const keep = new Set(list.map((h) => h.id));
-  for (const [id, entry] of cards) {
-    if (!keep.has(id)) { io.unobserve(entry.slot); entry.slot.remove(); }
-  }
-  const frag = document.createDocumentFragment();
-  for (const h of list) {
-    let entry = cards.get(h.id);
-    if (!entry) {
-      const slot = document.createElement('div');
-      slot.className = 'slot';
-      slot.dataset.id = h.id;
-      slot.textContent = `${h.name} · #${h.displayId}`;
-      entry = { hero: h, slot, handle: null, renderer: null };
-      cards.set(h.id, entry);
-    }
-    frag.append(entry.slot);
-    io.observe(entry.slot);
-  }
-  grid.replaceChildren(frag);
-  if (!list.length) {
-    const p = document.createElement('p'); p.className = 'empty'; p.textContent = 'Nessun eroe con questi filtri.';
-    grid.append(p);
-  }
-}
-
-$('#sort').addEventListener('change', renderGrid);
-$('#q').addEventListener('input', renderGrid);
-setStatus('Incolla un indirizzo per vedere l\'armata.');
-</script>
+  <footer>Read-only. Nothing here asks for a signature, a transaction or an approval.</footer>
+</main>
 </body>
 </html>
