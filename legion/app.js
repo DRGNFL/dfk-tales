@@ -45,6 +45,29 @@ const vg = (k) => (h) => genes(h.visualGenes.raw[k]);
 const traitScore = (h) => ['active1', 'active2', 'passive1', 'passive2'].reduce((t, k) => t + tierOf(h.statGenes.raw[k].d), 0);
 const statSum = (h) => STATS.reduce((t, [k]) => t + h.stats[k], 0);
 
+/* Hero Score from the Hero Transcendence & Divine Essence deck (burn multiplier left at 1).
+   Heroscore X = Heroscore × (1 + trait counter): Ge's rule for the legion score. */
+const RANK = { basic: 0, advanced: 1, elite: 2, exalted: 3, transcendent: 4 };
+const C_BASE = [150, 3000, 9000, 25000, 75000];
+const S_BASE = [150, 450, 1400, 10000, 30000];
+const R_BASE = { common: 0, uncommon: 1000, rare: 3000, legendary: 8000, mythic: 16000 };
+const levelScore = (l) => (l <= 5 ? l + 1 : l <= 8 ? 2 * (l - 6) + 8 : l <= 15 ? 4 * (l - 9) + 16 : l <= 35 ? 5 * (l - 16) + 45 : l <= 55 ? 7.5 * (l - 36) + 147.5 : 10 * (l - 56) + 300);
+const hsMemo = new Map();
+function heroScore(h) {
+  if (hsMemo.has(h.id)) return hsMemo.get(h.id);
+  const c = RANK[getClassTier(h.statGenes.raw.class.d)] || 0;
+  const s = RANK[getClassTier(h.statGenes.raw.subClass.d)] || 0;
+  const classScore = C_BASE[c] + 0.25 * C_BASE[s];
+  const rarityScore = (R_BASE[h.rarity] || 0) * (1 + c + 0.25 * (1 + s));
+  const summonScore = 0.005 * h.summonsRemaining * (100 + h.level) * (S_BASE[c] + 0.25 * S_BASE[s]);
+  const base = classScore + rarityScore + summonScore;
+  const v = (0.01 + 0.00007 * h.level) * (base * levelScore(h.level)) + base;
+  hsMemo.set(h.id, v);
+  return v;
+}
+const heroScoreX = (h) => heroScore(h) * (1 + traitScore(h));
+const fmtInt = (n) => Math.round(n).toLocaleString('en-US');
+
 const geneSet = (id, label, values, name, extra = {}) => ({ id, label, type: 'set', gene: true, values, name, order: 'key', ...extra });
 const set = (id, label, values, name, extra = {}) => ({ id, label, type: 'set', values, name: name || cap, order: 'count', ...extra });
 const range = (id, label, get, extra = {}) => ({ id, label, type: 'range', get, ...extra });
@@ -59,6 +82,8 @@ const HERO_TABS = [
     geneSet('subClass', 'Subclass', sg('subClass'), (r) => className(HERO_CLASSES[r]) || `#${r}`, { tag: (r) => TIER_TAG[tierOf(r)] }),
     set('tier', 'Class tier', (h) => [getClassTier(h.statGenes.raw.class.d)], cap, { order: ['basic', 'advanced', 'elite', 'exalted'] }),
     set('rarity', 'Rarity', (h) => [h.rarity], cap, { order: RARITY, swatch: (r) => `var(--r-${r})` }),
+    range('hsx', 'Heroscore X', heroScoreX, { hint: 'Heroscore × (1 + trait counter)' }),
+    range('hs', 'Heroscore', heroScore),
     range('level', 'Level', (h) => h.level),
     range('generation', 'Generation', (h) => h.generation),
     range('summons', 'Summons left', (h) => h.summonsRemaining, { hint: '11 means unlimited' }),
@@ -105,6 +130,8 @@ const HERO_TABS = [
   { id: 'gear', label: 'Gear', groups: SLOTS.map(([k, l]) => set(`eq-${k}`, l, (h) => [h.equipment && h.equipment[k] ? 'on' : 'off'], (v) => (v === 'on' ? 'Equipped' : 'Empty'), { order: ['on', 'off'] })) },
 ];
 const HERO_SORTS = [
+  ['hsx', 'Heroscore X', (a, b) => heroScoreX(b) - heroScoreX(a)],
+  ['hs', 'Heroscore', (a, b) => heroScore(b) - heroScore(a)],
   ['rarity', 'Rarity', (a, b) => rarityIdx(b.rarity) - rarityIdx(a.rarity) || b.level - a.level],
   ['level', 'Level', (a, b) => b.level - a.level || rarityIdx(b.rarity) - rarityIdx(a.rarity)],
   ['sum', 'Stat total', (a, b) => statSum(b) - statSum(a)],
@@ -134,7 +161,12 @@ const HEROES = {
     const h = entry.item;
     const go = (gear) => {
       entry.handle = createAnimatedHeroCard(h, { renderer: gear ? { gear } : {} });
-      entry.slot.replaceChildren(entry.handle.element);
+      const t = traitScore(h);
+      const strip = el('div', 'hs');
+      const a = el('span'); a.append('HS ', el('b', null, fmtInt(heroScore(h))));
+      const b = el('span', 'x'); b.append(`×${1 + t} · HSX `, el('b', null, fmtInt(heroScoreX(h))));
+      strip.append(a, b);
+      entry.slot.replaceChildren(entry.handle.element, strip);
       entry.slot.classList.add('live');
       entry.handle.renderer.then((r) => { entry.renderer = r; if (!entry.visible) r.pause(); });
     };
@@ -145,6 +177,7 @@ const HEROES = {
   tiles: (list) => {
     const n = (f) => list.filter(f).length;
     return [
+      ['Heroscore X', fmtInt(list.reduce((t, h) => t + heroScoreX(h), 0))], ['Heroscore', fmtInt(list.reduce((t, h) => t + heroScore(h), 0))],
       ['Mythic', n((h) => h.rarity === 'mythic')], ['Legendary', n((h) => h.rarity === 'legendary')], ['Shiny', n((h) => h.shiny)],
       ['Gen 0', n((h) => h.generation === 0)], ['Exalted', n((h) => getClassTier(h.statGenes.raw.class.d) === 'exalted')],
       ['Elite', n((h) => getClassTier(h.statGenes.raw.class.d) === 'elite')], ['Max level', Math.max(...list.map((h) => h.level))],
@@ -152,6 +185,7 @@ const HEROES = {
     ];
   },
   rarity: (h) => h.rarity,
+  subtotal: (list) => `Heroscore X ${fmtInt(list.reduce((t, h) => t + heroScoreX(h), 0))}`,
   slotSize: 'hero',
 };
 
@@ -604,6 +638,7 @@ function renderGrid() {
   }
   grid.replaceChildren(frag);
   const c = $('#count'); c.replaceChildren('Showing ', el('b', null, String(list.length)), ` of ${sec.data.length}`);
+  if (sec.subtotal && list.length) c.append(' · ', el('b', null, sec.subtotal(list)));
 }
 
 let timer = 0;
@@ -695,7 +730,7 @@ async function load() {
   const my = ++run;
   owner = addr; chainName = $('#chain').selectedOptions[0].textContent;
   client = createDFKClient({ chainId });
-  heroById.clear(); gearByKey.clear(); tokens = [];
+  heroById.clear(); gearByKey.clear(); hsMemo.clear(); tokens = [];
   for (const sec of Object.values(SECTIONS)) { resetSection(sec); sec.state = 'loading'; }
   $('#void').hidden = true; $('#headline').hidden = false;
   renderSecTabs(); renderHeadline(); buildSidebar(); renderGrid();
