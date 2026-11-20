@@ -72,7 +72,62 @@
 .headline { display: grid; gap: 14px; }
 .headline[hidden] { display: none; }
 .headline h1 { font: 700 clamp(34px, 5vw, 58px)/0.95 var(--display); text-transform: uppercase; letter-spacing: .02em; margin: 4px 0 0; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
-.headline h1 span { color: var(--red); font-family: var(--mono); font-size: .62em; }
+.headline h1 .tot { color: var(--red); font-family: var(--mono); font-size: .62em; }
+.sections { display: flex; flex-wrap: wrap; gap: 0; border-bottom: 1px solid var(--line); }
+.sections button { border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); padding: 12px 18px 11px; font-size: 13px; }
+.sections button:hover { color: var(--text); border-color: transparent; border-bottom-color: var(--line-2); }
+.sections button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--red); }
+.sections .n { font: 600 11px var(--mono); color: var(--red); }
+.rbar[hidden], .legend[hidden], .resbar[hidden], .seg-wrap[hidden] { display: none; }
+
+/* pets */
+.grid.pet { grid-template-columns: repeat(auto-fill, 220px); gap: 16px; }
+.grid.pet .slot { width: 220px; height: 372px; }
+.pcard { width: 220px; height: 372px; background: var(--panel); border: 1px solid var(--line); border-top: 3px solid var(--rc); display: grid; grid-template-rows: auto 1fr; }
+.pstage { position: relative; height: 180px; display: grid; place-items: center; background: #050505; border-bottom: 1px solid var(--line); }
+.pstage canvas { width: 180px; height: 180px; image-rendering: pixelated; }
+.shiny { position: absolute; top: 8px; right: 8px; font: 600 9.5px var(--mono); letter-spacing: .1em; color: #000; background: #ffe066; padding: 2px 5px; }
+.pbody { padding: 10px 12px 12px; display: grid; gap: 4px; align-content: start; }
+.pid, .pmeta { font: 11px var(--mono); color: var(--muted); }
+.pname { font: 700 17px/1.15 var(--display); text-transform: uppercase; letter-spacing: .03em; margin: 2px 0 0; color: var(--rc); }
+.blist { display: grid; gap: 2px; margin-top: 6px; }
+.bline { display: grid; grid-template-columns: 14px 30px 1fr; gap: 6px; font-size: 12px; align-items: baseline; }
+.bk { font: 600 10px var(--mono); color: var(--muted); }
+.bs { font-size: 10px; letter-spacing: -1px; color: #888; }
+.bs.t2 { color: var(--r-rare); } .bs.t3 { color: var(--r-mythic); }
+.bn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.muted { color: var(--muted); }
+.pbond, .gequip { font-size: 11.5px; color: var(--muted); margin-top: 6px; }
+.link { background: none; border: 0; padding: 0; font: 500 11.5px var(--body); letter-spacing: 0; text-transform: none; color: var(--text); text-decoration: underline; text-decoration-color: var(--red); text-underline-offset: 3px; cursor: pointer; }
+.link:hover { color: #fff; border: 0; }
+
+/* gear */
+.grid.gear { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.grid.gear .slot, .grid.item .slot { width: auto; height: auto; }
+.gcard { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--rc); padding: 12px; display: grid; gap: 10px; align-content: start; height: 100%; }
+.gtop { display: grid; grid-template-columns: 64px 1fr; gap: 12px; align-items: center; }
+.gtop img { width: 64px; height: 64px; image-rendering: pixelated; background: #050505; border: 1px solid var(--line); }
+.gkind, .gid { font: 11px var(--mono); color: var(--muted); }
+.gname { font: 700 16px/1.15 var(--display); text-transform: uppercase; letter-spacing: .03em; margin: 2px 0; color: var(--rc); }
+.gstats { display: flex; flex-wrap: wrap; gap: 4px; }
+.gst { display: inline-flex; gap: 6px; align-items: baseline; border: 1px solid var(--line-2); padding: 3px 7px; }
+.gst i { font: 600 9.5px var(--mono); font-style: normal; color: var(--muted); }
+.gst b { font: 600 12px var(--mono); }
+.gdur { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; font: 10.5px var(--mono); color: var(--muted); }
+.gdur .bar { height: 4px; background: var(--panel-2); }
+.gdur .bar i { display: block; height: 100%; background: var(--text); }
+.gbon { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; font-size: 12px; }
+.gbon li { padding-left: 12px; position: relative; }
+.gbon li::before { content: ""; position: absolute; left: 0; top: .6em; width: 5px; height: 5px; background: var(--line-2); }
+.gbon li.ench::before { background: var(--red); }
+
+/* items */
+.grid.item { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
+.icard { background: var(--panel); border: 1px solid var(--line); padding: 10px 12px; display: grid; grid-template-columns: 48px 1fr auto; gap: 12px; align-items: center; }
+.icard img { width: 48px; height: 48px; object-fit: contain; image-rendering: pixelated; }
+.iname { font: 600 13px/1.2 var(--body); margin: 0; }
+.icat { font: 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.iamt { font: 600 15px var(--mono); }
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); }
 .tile { background: var(--bg); padding: 10px 12px; display: grid; gap: 2px; }
 .tile b { font: 600 22px var(--mono); }
@@ -123,7 +178,7 @@
         <h2>Filters <b id="active-n" hidden>0</b></h2>
         <button type="button" id="btn-reset" disabled>Reset</button>
       </div>
-      <div class="seg-wrap">
+      <div class="seg-wrap" id="scope-wrap">
         <span class="label">Genes to match</span>
         <div class="seg" role="group" aria-label="Genes to match">
           <button type="button" id="scope-d" data-scope="d" aria-pressed="true">Dominant</button>
@@ -132,7 +187,7 @@
       </div>
     </div>
     <div class="tabs" role="tablist" id="tabs"></div>
-    <div id="panels"><p class="side-empty">Load a legion to filter it.</p></div>
+    <div id="panels"></div>
   </aside>
 
   <main class="main">
@@ -149,27 +204,25 @@
     <div class="status" id="status" role="status"></div>
 
     <section class="headline" id="headline" hidden>
+      <div class="sections" id="sections" role="tablist" aria-label="Collection">
+        <button type="button" role="tab" id="sec-heroes" data-sec="heroes">Heroes <span class="n"></span></button>
+        <button type="button" role="tab" id="sec-pets" data-sec="pets">Pets <span class="n"></span></button>
+        <button type="button" role="tab" id="sec-gear" data-sec="gear">Gear <span class="n"></span></button>
+        <button type="button" role="tab" id="sec-items" data-sec="items">Items <span class="n"></span></button>
+      </div>
       <div>
         <div class="eyebrow" id="who"></div>
-        <h1>Legion <span id="total"></span></h1>
+        <h1><span id="sec-title">Heroes</span> <span class="tot" id="total"></span></h1>
       </div>
       <div class="tiles" id="tiles"></div>
       <div class="rbar" id="rbar" aria-hidden="true"></div>
       <div class="legend" id="legend"></div>
-      <div class="resbar">
+      <div class="resbar" id="resbar">
         <span class="count" id="count"></span>
         <div class="right">
           <button type="button" class="only-mobile" id="btn-filters">Filters</button>
           <label class="label" for="sort">Sort</label>
-          <select id="sort">
-            <option value="rarity">Rarity</option>
-            <option value="level">Level</option>
-            <option value="sum">Stat total</option>
-            <option value="trait">Trait score</option>
-            <option value="gen">Generation</option>
-            <option value="summons">Summons left</option>
-            <option value="id">ID</option>
-          </select>
+          <select id="sort"></select>
         </div>
       </div>
     </section>
@@ -184,419 +237,6 @@
   </main>
 </div>
 
-<script type="module">
-import {
-  createDFKClient, ACTIVE_SKILLS, PASSIVE_SKILLS, HERO_CLASSES, PROFESSIONS, ELEMENTS, BACKGROUNDS, CRAFTING_PROFESSIONS,
-  STAT_BOOSTS, HAIR_COLORS, SKIN_COLORS, EYE_COLORS, APPENDAGE_COLORS, HEAD_APPENDAGES, BACK_APPENDAGES,
-  FEMALE_HAIR_STYLES, MALE_HAIR_STYLES, getClassTier,
-} from 'https://esm.sh/@defikingdoms/game-sdk@0.1.0?deps=ethers@5.8.0';
-import { createAnimatedHeroCard } from 'https://esm.sh/@defikingdoms/game-sdk@0.1.0/renderer?deps=ethers@5.8.0';
-
-/* ---------- vocab ---------- */
-const RARITY = ['common', 'uncommon', 'rare', 'legendary', 'mythic'];
-const REALMS = { serendale: 'Serendale 1.0', crystalvale: 'Crystalvale', serendale2: 'Serendale 2.0', sunderedisles: 'Sundered Isles', avalanche: 'Avalanche' };
-const STATS = [['strength', 'STR'], ['intelligence', 'INT'], ['wisdom', 'WIS'], ['luck', 'LCK'], ['agility', 'AGI'], ['vitality', 'VIT'], ['endurance', 'END'], ['dexterity', 'DEX']];
-const SKILLS = [['mining', 'Mining'], ['gardening', 'Gardening'], ['fishing', 'Fishing'], ['foraging', 'Foraging']];
-const SLOTS = [['weapon1Id', 'Weapon 1'], ['weapon2Id', 'Weapon 2'], ['offhand1Id', 'Offhand 1'], ['offhand2Id', 'Offhand 2'], ['armorId', 'Armor'], ['accessoryId', 'Accessory'], ['petId', 'Pet']];
-const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : '');
-const className = (c) => ({ darkKnight: 'Dark Knight', spellBow: 'SpellBow', dreadKnight: 'DreadKnight' })[c] || cap(c);
-const tierOf = (r) => (r < 16 ? 0 : r < 24 ? 1 : r < 28 ? 2 : 3);
-const tierCode = (r) => (r < 16 ? `B${r + 1}` : r < 24 ? `A${r - 15}` : r < 28 ? `E${r - 23}` : `X${r - 27}`);
-const TIER_TAG = ['', 'ADV', 'ELITE', 'EXALT'];
-const hex = (h) => (h ? `#${h}` : null);
-
-/* ---------- gene scope ---------- */
-let scope = 'd';
-const genes = (raw) => (scope === 'd' ? [raw.d] : [...new Set([raw.d, raw.r1, raw.r2, raw.r3])]);
-const sg = (k) => (h) => genes(h.statGenes.raw[k]);
-const vg = (k) => (h) => genes(h.visualGenes.raw[k]);
-const traitScore = (h) => ['active1', 'active2', 'passive1', 'passive2'].reduce((t, k) => t + tierOf(h.statGenes.raw[k].d), 0);
-const statSum = (h) => STATS.reduce((t, [k]) => t + h.stats[k], 0);
-
-/* ---------- filter definitions ---------- */
-const geneSet = (id, label, values, name, extra = {}) => ({ id, label, type: 'set', gene: true, values, name, order: 'key', ...extra });
-const skillName = (map) => (r) => map[r] || tierCode(r);
-const swatchName = (map) => (r) => tierCode(Number(r));
-const range = (id, label, get, extra = {}) => ({ id, label, type: 'range', get, ...extra });
-
-const TABS = [
-  { id: 'basics', label: 'Basics', groups: [
-    geneSet('class', 'Class', sg('class'), (r) => className(HERO_CLASSES[r]) || `#${r}`, { tag: (r) => TIER_TAG[tierOf(r)] }),
-    geneSet('subClass', 'Subclass', sg('subClass'), (r) => className(HERO_CLASSES[r]) || `#${r}`, { tag: (r) => TIER_TAG[tierOf(r)] }),
-    { id: 'tier', label: 'Class tier', type: 'set', values: (h) => [getClassTier(h.statGenes.raw.class.d)], name: cap, order: ['basic', 'advanced', 'elite', 'exalted'] },
-    { id: 'rarity', label: 'Rarity', type: 'set', values: (h) => [h.rarity], name: cap, order: RARITY, swatch: (r) => `var(--r-${r})` },
-    range('level', 'Level', (h) => h.level),
-    range('generation', 'Generation', (h) => h.generation),
-    range('summons', 'Summons left', (h) => h.summonsRemaining, { hint: '11 means unlimited' }),
-    { id: 'realm', label: 'Origin realm', type: 'set', values: (h) => [h.originRealm], name: (r) => REALMS[r] || r, order: Object.keys(REALMS), hint: 'From the ID: no prefix Serendale 1.0, 1… Crystalvale, 2… Serendale 2.0' },
-    { id: 'shiny', label: 'Shiny', type: 'set', values: (h) => [h.shiny ? 'yes' : 'no'], name: (v) => (v === 'yes' ? 'Shiny' : 'Not shiny'), order: ['yes', 'no'] },
-    geneSet('gender', 'Gender', vg('gender'), (r) => ({ 1: 'Male', 3: 'Female' })[r] || `#${r}`),
-    geneSet('element', 'Element', sg('element'), (r) => cap(ELEMENTS[r]) || `#${r}`),
-    geneSet('background', 'Background', vg('background'), (r) => cap(BACKGROUNDS[r]) || `#${r}`),
-  ] },
-  { id: 'attributes', label: 'Traits', groups: [
-    geneSet('active1', 'Active 1', sg('active1'), skillName(ACTIVE_SKILLS), { wide: true, tag: (r) => TIER_TAG[tierOf(r)] }),
-    geneSet('active2', 'Active 2', sg('active2'), skillName(ACTIVE_SKILLS), { wide: true, tag: (r) => TIER_TAG[tierOf(r)] }),
-    geneSet('passive1', 'Passive 1', sg('passive1'), skillName(PASSIVE_SKILLS), { wide: true, tag: (r) => TIER_TAG[tierOf(r)] }),
-    geneSet('passive2', 'Passive 2', sg('passive2'), skillName(PASSIVE_SKILLS), { wide: true, tag: (r) => TIER_TAG[tierOf(r)] }),
-    range('trait', 'Trait score', traitScore, { hint: 'Dominant traits: Advanced 1, Elite 2, Exalted 3' }),
-    geneSet('profession', 'Gathering profession', sg('profession'), (r) => cap(PROFESSIONS[r]) || `#${r}`),
-    geneSet('crafting1', 'Crafting 1', sg('crafting1'), (r) => CRAFTING_PROFESSIONS[r] || `#${r}`),
-    geneSet('crafting2', 'Crafting 2', sg('crafting2'), (r) => CRAFTING_PROFESSIONS[r] || `#${r}`),
-    geneSet('statBoost1', 'Stat boost 1', sg('statBoost1'), (r) => STAT_BOOSTS[r] || `#${r}`),
-    geneSet('statBoost2', 'Stat boost 2', sg('statBoost2'), (r) => STAT_BOOSTS[r] || `#${r}`),
-  ] },
-  { id: 'stats', label: 'Stats', groups: [
-    ...STATS.map(([k, l]) => range(`st-${k}`, l, (h) => h.stats[k])),
-    range('st-hp', 'HP', (h) => h.stats.hp),
-    range('st-mp', 'MP', (h) => h.stats.mp),
-    range('st-sum', 'Stat total', statSum, { hint: 'STR + INT + WIS + LCK + AGI + VIT + END + DEX' }),
-    ...SKILLS.map(([k, l]) => range(`sk-${k}`, `${l} skill`, (h) => h.skills[k], { closed: true })),
-    ...STATS.map(([k, l]) => range(`pg-${k}`, `${l} primary growth %`, (h) => h.primaryGrowth[k] / 100, { closed: true })),
-    ...STATS.map(([k, l]) => range(`sgr-${k}`, `${l} secondary growth %`, (h) => h.secondaryGrowth[k] / 100, { closed: true })),
-  ] },
-  { id: 'looks', label: 'Looks', groups: [
-    { id: 'hairStyle', label: 'Hair style', type: 'set', gene: true, wide: true,
-      values: (h) => genes(h.visualGenes.raw.hairStyle).map((r) => `${h.gender}:${r}`),
-      name: (k) => { const [g, r] = k.split(':'); return `${(g === 'female' ? FEMALE_HAIR_STYLES : MALE_HAIR_STYLES)[r] || `#${r}`} ${g === 'female' ? '♀' : '♂'}`; },
-      order: (a, b) => a.localeCompare(b, undefined, { numeric: true }) },
-    geneSet('hairColor', 'Hair color', vg('hairColor'), swatchName(HAIR_COLORS), { swatch: (r) => hex(HAIR_COLORS[r]) }),
-    geneSet('headAppendage', 'Head appendage', vg('headAppendage'), (r) => HEAD_APPENDAGES[r] || `#${r}`, { wide: true, tag: (r) => tierCode(Number(r)) }),
-    geneSet('appendageColor', 'Head appendage color', vg('appendageColor'), swatchName(APPENDAGE_COLORS), { swatch: (r) => hex(APPENDAGE_COLORS[r]) }),
-    geneSet('backAppendage', 'Back appendage', vg('backAppendage'), (r) => BACK_APPENDAGES[r] || `#${r}`, { wide: true, tag: (r) => tierCode(Number(r)) }),
-    geneSet('backAppendageColor', 'Back appendage color', vg('backAppendageColor'), swatchName(APPENDAGE_COLORS), { swatch: (r) => hex(APPENDAGE_COLORS[r]) }),
-    geneSet('skinColor', 'Skin color', vg('skinColor'), swatchName(SKIN_COLORS), { swatch: (r) => hex(SKIN_COLORS[r]) }),
-    geneSet('eyeColor', 'Eye color', vg('eyeColor'), swatchName(EYE_COLORS), { swatch: (r) => hex(EYE_COLORS[r]) }),
-  ] },
-  { id: 'gear', label: 'Gear', groups: SLOTS.map(([k, l]) => ({
-    id: `eq-${k}`, label: l, type: 'set', values: (h) => [h.equipment && h.equipment[k] ? 'on' : 'off'],
-    name: (v) => (v === 'on' ? 'Equipped' : 'Empty'), order: ['on', 'off'] })) },
-];
-const GROUPS = TABS.flatMap((t) => t.groups.map((g) => ({ ...g, tab: t.id })));
-
-/* ---------- state ---------- */
-const $ = (s) => document.querySelector(s);
-const statusEl = $('#status');
-let heroes = [];
-let cache = new Map();        // hero id -> { groupId: [keys] | number }
-const sel = {};                // set groups: Set of keys
-const rng = {};                // range groups: { min, max }
-let query = '';
-let activeTab = 'basics';
-const cards = new Map();
-
-function setStatus(t, err = false) { statusEl.textContent = t; statusEl.classList.toggle('err', err); }
-const isAddr = (a) => /^0x[0-9a-fA-F]{40}$/.test(a.trim());
-const short = (a) => `${a.slice(0, 6)}…${a.slice(-4)}`;
-const store = { get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} } };
-
-function buildCache() {
-  cache = new Map();
-  for (const h of heroes) {
-    const row = {};
-    for (const g of GROUPS) row[g.id] = g.type === 'set' ? g.values(h).map(String) : g.get(h);
-    cache.set(h.id, row);
-  }
-}
-
-function matches(h, skip) {
-  const row = cache.get(h.id);
-  if (query) {
-    const q = query.toLowerCase();
-    if (!(h.name.toLowerCase().includes(q) || h.id.includes(q) || String(h.displayId).includes(q))) return false;
-  }
-  for (const g of GROUPS) {
-    if (g.id === skip) continue;
-    if (g.type === 'set') {
-      const s = sel[g.id];
-      if (s && s.size && !row[g.id].some((v) => s.has(v))) return false;
-    } else {
-      const r = rng[g.id];
-      if (r) {
-        const v = row[g.id];
-        if (r.min != null && v < r.min) return false;
-        if (r.max != null && v > r.max) return false;
-      }
-    }
-  }
-  return true;
-}
-
-const activeCount = () => GROUPS.reduce((n, g) => n + (g.type === 'set' ? (sel[g.id] && sel[g.id].size ? 1 : 0) : (rng[g.id] && (rng[g.id].min != null || rng[g.id].max != null) ? 1 : 0)), 0) + (query ? 1 : 0);
-
-/* ---------- sidebar ---------- */
-function orderKeys(g, keys) {
-  if (Array.isArray(g.order)) return [...keys].sort((a, b) => g.order.indexOf(a) - g.order.indexOf(b));
-  if (typeof g.order === 'function') return [...keys].sort(g.order);
-  return [...keys].sort((a, b) => Number(a) - Number(b));
-}
-
-function buildSidebar() {
-  const tabs = $('#tabs');
-  tabs.replaceChildren(...TABS.map((t) => {
-    const b = document.createElement('button');
-    b.type = 'button'; b.id = `tab-${t.id}`; b.setAttribute('role', 'tab'); b.dataset.tab = t.id;
-    b.setAttribute('aria-selected', String(t.id === activeTab));
-    b.textContent = t.label;
-    const d = document.createElement('span'); d.className = 'dot'; d.hidden = true; b.append(d);
-    b.addEventListener('click', () => { activeTab = t.id; syncTabs(); });
-    return b;
-  }));
-  const panels = $('#panels');
-  panels.replaceChildren(...TABS.map((t) => {
-    const p = document.createElement('div');
-    p.className = 'panel'; p.id = `panel-${t.id}`; p.setAttribute('role', 'tabpanel');
-    if (t.id === 'basics') {
-      const s = document.createElement('div'); s.className = 'search';
-      const i = document.createElement('input'); i.type = 'search'; i.id = 'q'; i.placeholder = 'Name or ID'; i.setAttribute('aria-label', 'Search name or ID'); i.value = query;
-      i.addEventListener('input', () => { query = i.value.trim(); schedule(); });
-      s.append(i); p.append(s);
-    }
-    for (const g of t.groups) p.append(buildGroup(g));
-    return p;
-  }));
-  syncTabs();
-}
-
-function buildGroup(g) {
-  const det = document.createElement('details');
-  det.className = 'fg'; det.dataset.group = g.id; det.open = !g.closed;
-  const sum = document.createElement('summary');
-  const lab = document.createElement('span'); lab.className = 'label'; lab.textContent = g.label;
-  const on = document.createElement('span'); on.className = 'on';
-  sum.append(lab, on); det.append(sum);
-  if (g.hint) { const h = document.createElement('div'); h.className = 'hint'; h.textContent = g.hint; det.append(h); }
-  if (g.type === 'set') {
-    const box = document.createElement('div'); box.className = `opts${g.wide ? ' wide' : ''}`;
-    const all = new Set(); for (const row of cache.values()) row[g.id].forEach((v) => all.add(v));
-    for (const key of orderKeys(g, all)) {
-      const l = document.createElement('label'); l.className = 'opt'; l.dataset.key = key;
-      const c = document.createElement('input'); c.type = 'checkbox'; c.id = `f-${g.id}-${key}`.replace(/[^a-zA-Z0-9_-]/g, '_'); c.value = key;
-      c.checked = !!(sel[g.id] && sel[g.id].has(key));
-      c.addEventListener('change', () => {
-        sel[g.id] = sel[g.id] || new Set();
-        if (c.checked) sel[g.id].add(key); else sel[g.id].delete(key);
-        schedule();
-      });
-      const sw = document.createElement('span'); const col = g.swatch ? g.swatch(key) : null;
-      sw.className = col ? 'sw' : 'sw none'; if (col) sw.style.background = col;
-      const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = g.name(key); nm.title = g.name(key);
-      const tag = g.tag ? g.tag(key) : ''; if (tag) { const i = document.createElement('i'); i.textContent = tag; nm.append(i); }
-      const ct = document.createElement('span'); ct.className = 'ct';
-      l.append(c, sw, nm, ct); box.append(l);
-    }
-    det.append(box);
-  } else {
-    let lo = Infinity, hi = -Infinity;
-    for (const row of cache.values()) { const v = row[g.id]; if (v < lo) lo = v; if (v > hi) hi = v; }
-    const fmt = (v) => (Number.isFinite(v) ? String(Math.round(v * 100) / 100) : '');
-    const box = document.createElement('div'); box.className = 'rng';
-    const mk = (which, ph) => {
-      const i = document.createElement('input'); i.type = 'number'; i.step = 'any'; i.inputMode = 'decimal';
-      i.id = `f-${g.id}-${which}`; i.placeholder = ph; i.setAttribute('aria-label', `${g.label} ${which}`);
-      const cur = rng[g.id] && rng[g.id][which]; if (cur != null) i.value = cur;
-      i.addEventListener('input', () => {
-        rng[g.id] = rng[g.id] || { min: null, max: null };
-        rng[g.id][which] = i.value === '' ? null : Number(i.value);
-        schedule();
-      });
-      return i;
-    };
-    const dash = document.createElement('span'); dash.textContent = '–';
-    box.append(mk('min', `min ${fmt(lo)}`), dash, mk('max', `max ${fmt(hi)}`));
-    det.append(box);
-  }
-  return det;
-}
-
-function syncTabs() {
-  document.querySelectorAll('#tabs [role=tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === activeTab)));
-  TABS.forEach((t) => { const p = document.getElementById(`panel-${t.id}`); if (p) p.hidden = t.id !== activeTab; });
-}
-
-function updateFacets() {
-  for (const g of GROUPS) {
-    const det = document.querySelector(`.fg[data-group="${g.id}"]`);
-    if (!det) continue;
-    let active = false;
-    if (g.type === 'set') {
-      const counts = new Map();
-      for (const h of heroes) if (matches(h, g.id)) for (const v of cache.get(h.id)[g.id]) counts.set(v, (counts.get(v) || 0) + 1);
-      det.querySelectorAll('.opt').forEach((l) => {
-        const n = counts.get(l.dataset.key) || 0;
-        l.querySelector('.ct').textContent = n;
-        l.classList.toggle('zero', n === 0);
-      });
-      active = !!(sel[g.id] && sel[g.id].size);
-      det.querySelector('.on').textContent = active ? `${sel[g.id].size} ON` : '';
-    } else {
-      const r = rng[g.id];
-      active = !!(r && (r.min != null || r.max != null));
-      det.querySelector('.on').textContent = active ? 'ON' : '';
-    }
-  }
-  const n = activeCount();
-  $('#active-n').hidden = n === 0; $('#active-n').textContent = n;
-  $('#btn-reset').disabled = n === 0;
-  for (const t of TABS) {
-    const on = t.groups.some((g) => (g.type === 'set' ? sel[g.id] && sel[g.id].size : rng[g.id] && (rng[g.id].min != null || rng[g.id].max != null))) || (t.id === 'basics' && !!query);
-    const dot = document.querySelector(`#tab-${t.id} .dot`); if (dot) dot.hidden = !on;
-  }
-}
-
-/* ---------- grid ---------- */
-const SORTS = {
-  rarity: (a, b) => RARITY.indexOf(b.rarity) - RARITY.indexOf(a.rarity) || b.level - a.level,
-  level: (a, b) => b.level - a.level || RARITY.indexOf(b.rarity) - RARITY.indexOf(a.rarity),
-  sum: (a, b) => statSum(b) - statSum(a),
-  trait: (a, b) => traitScore(b) - traitScore(a) || RARITY.indexOf(b.rarity) - RARITY.indexOf(a.rarity),
-  gen: (a, b) => a.generation - b.generation || RARITY.indexOf(b.rarity) - RARITY.indexOf(a.rarity),
-  summons: (a, b) => b.summonsRemaining - a.summonsRemaining,
-  id: (a, b) => (BigInt(a.id) < BigInt(b.id) ? -1 : 1),
-};
-
-const io = new IntersectionObserver((entries) => {
-  for (const e of entries) {
-    const entry = cards.get(e.target.dataset.id);
-    if (!entry) continue;
-    if (e.isIntersecting) {
-      if (!entry.handle) {
-        entry.handle = createAnimatedHeroCard(entry.hero, { renderer: {} });
-        entry.slot.replaceChildren(entry.handle.element);
-        entry.slot.classList.add('live');
-        entry.handle.renderer.then((r) => { entry.renderer = r; });
-      } else if (entry.renderer) entry.renderer.resume();
-    } else if (entry.renderer) entry.renderer.pause();
-  }
-}, { rootMargin: '400px 0px' });
-
-function renderGrid() {
-  const list = heroes.filter((h) => matches(h, null)).sort(SORTS[$('#sort').value]);
-  const keep = new Set(list.map((h) => h.id));
-  for (const [id, entry] of cards) if (!keep.has(id)) { io.unobserve(entry.slot); entry.slot.remove(); }
-  const frag = document.createDocumentFragment();
-  for (const h of list) {
-    let entry = cards.get(h.id);
-    if (!entry) {
-      const slot = document.createElement('div');
-      slot.className = 'slot'; slot.dataset.id = h.id; slot.textContent = `${h.name}\n#${h.displayId}`;
-      entry = { hero: h, slot, handle: null, renderer: null };
-      cards.set(h.id, entry);
-    }
-    frag.append(entry.slot);
-    io.observe(entry.slot);
-  }
-  const grid = $('#grid');
-  grid.replaceChildren(frag);
-  $('#count').innerHTML = '';
-  const b = document.createElement('b'); b.textContent = list.length;
-  $('#count').append('Showing ', b, ` of ${heroes.length}`);
-}
-
-let timer = 0;
-function schedule() { clearTimeout(timer); timer = setTimeout(() => { renderGrid(); updateFacets(); }, 120); }
-
-/* ---------- summary ---------- */
-function renderHeadline(addr, chainName) {
-  $('#who').textContent = `${short(addr)} · ${chainName}`;
-  $('#total').textContent = heroes.length;
-  const n = (f) => heroes.filter(f).length;
-  const tiles = [
-    ['Mythic', n((h) => h.rarity === 'mythic')],
-    ['Legendary', n((h) => h.rarity === 'legendary')],
-    ['Shiny', n((h) => h.shiny)],
-    ['Gen 0', n((h) => h.generation === 0)],
-    ['Exalted', n((h) => getClassTier(h.statGenes.raw.class.d) === 'exalted')],
-    ['Elite', n((h) => getClassTier(h.statGenes.raw.class.d) === 'elite')],
-    ['Max level', Math.max(...heroes.map((h) => h.level))],
-    ['Avg level', (heroes.reduce((t, h) => t + h.level, 0) / heroes.length).toFixed(1)],
-  ];
-  $('#tiles').replaceChildren(...tiles.map(([k, v]) => {
-    const d = document.createElement('div'); d.className = 'tile';
-    const s = document.createElement('span'); s.className = 'label'; s.textContent = k;
-    const b = document.createElement('b'); b.textContent = v;
-    d.append(s, b); return d;
-  }));
-  const counts = RARITY.map((r) => n((h) => h.rarity === r));
-  $('#rbar').replaceChildren(...RARITY.map((r, i) => { const e = document.createElement('i'); e.style.width = `${(counts[i] / heroes.length) * 100}%`; e.style.background = `var(--r-${r})`; return e; }));
-  $('#legend').replaceChildren(...RARITY.map((r, i) => { const e = document.createElement('em'); e.style.setProperty('--c', `var(--r-${r})`); e.textContent = `${cap(r)} ${counts[i]}`; return e; }));
-  $('#headline').hidden = false;
-  $('#void').hidden = true;
-}
-
-/* ---------- loading ---------- */
-let run = 0;
-async function load() {
-  const addr = $('#addr').value.trim();
-  if (!isAddr(addr)) { setStatus('That is not a wallet address: 0x followed by 40 characters.', true); return; }
-  const chainId = Number($('#chain').value);
-  const my = ++run;
-  $('#btn-load').disabled = true;
-  try {
-    const dfk = createDFKClient({ chainId });
-    setStatus('Looking up the legion…');
-    const ids = await dfk.heroes.idsByOwner(addr, { includeListed: true });
-    if (my !== run) return;
-    if (!ids.length) { setStatus('No heroes for this address on this chain.'); return; }
-    const out = [];
-    for (let i = 0; i < ids.length; i += 60) {
-      setStatus(`Reading heroes ${Math.min(i + 60, ids.length)} / ${ids.length}`);
-      out.push(...(await dfk.heroes.getMany(ids.slice(i, i + 60))));
-      if (my !== run) return;
-    }
-    for (const entry of cards.values()) { io.unobserve(entry.slot); if (entry.handle && entry.handle.destroy) entry.handle.destroy(); }
-    cards.clear();
-    heroes = out;
-    for (const k of Object.keys(sel)) delete sel[k];
-    for (const k of Object.keys(rng)) delete rng[k];
-    query = '';
-    buildCache();
-    buildSidebar();
-    renderHeadline(addr, $('#chain').selectedOptions[0].textContent);
-    renderGrid();
-    updateFacets();
-    store.set('dfk-tales:addr', addr); store.set('dfk-tales:chain', String(chainId));
-    setStatus(`${heroes.length} heroes loaded.`);
-  } catch (e) {
-    console.error(e);
-    if (my === run) setStatus(`Could not read the chain: ${e && e.message ? e.message.slice(0, 140) : e}. Try again in a moment.`, true);
-  } finally {
-    if (my === run) $('#btn-load').disabled = false;
-  }
-}
-
-/* ---------- wiring ---------- */
-$('#form').addEventListener('submit', (e) => { e.preventDefault(); load(); });
-$('#sort').addEventListener('change', renderGrid);
-$('#btn-reset').addEventListener('click', () => {
-  for (const k of Object.keys(sel)) delete sel[k];
-  for (const k of Object.keys(rng)) delete rng[k];
-  query = '';
-  buildSidebar(); renderGrid(); updateFacets();
-});
-document.querySelectorAll('[data-scope]').forEach((b) => b.addEventListener('click', () => {
-  scope = b.dataset.scope;
-  document.querySelectorAll('[data-scope]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
-  if (!heroes.length) return;
-  for (const g of GROUPS) if (g.gene) delete sel[g.id];
-  buildCache(); buildSidebar(); renderGrid(); updateFacets();
-}));
-$('#btn-filters').addEventListener('click', () => $('#side').classList.toggle('open'));
-if (window.ethereum) {
-  const b = $('#btn-wallet');
-  b.hidden = false;
-  b.addEventListener('click', async () => {
-    try {
-      const [a] = await window.ethereum.request({ method: 'eth_requestAccounts' });
-      if (a) { $('#addr').value = a; load(); }
-    } catch (e) { setStatus('The wallet did not share an address. You can paste it instead.', true); }
-  });
-}
-const lastAddr = store.get('dfk-tales:addr');
-if (lastAddr) $('#addr').value = lastAddr;
-const lastChain = store.get('dfk-tales:chain');
-if (lastChain && [...$('#chain').options].some((o) => o.value === lastChain)) $('#chain').value = lastChain;
-setStatus(lastAddr ? 'Last wallet is filled in. Press Load legion.' : 'Paste a wallet address to begin.');
-</script>
+<script type="module" src="app.js"></script>
 </body>
 </html>
