@@ -253,6 +253,10 @@ const PETS = {
 
 /* ================= GEAR ================= */
 const gr = (e) => String(e.rarity).toLowerCase();
+const EMPTY_ENCH = /empty enchantment slot/i;
+const realEnch = (e) => e.enchantments.filter((b) => !EMPTY_ENCH.test(b.text));
+const emptyEnch = (e) => e.enchantments.length - realEnch(e).length;
+const gearId = (e) => { try { return String(BigInt(e.id) % 1000000000000n); } catch (x) { return e.id; } };
 const GEAR_TABS = [
   { id: 'basics', label: 'Basics', groups: [
     set('kind', 'Kind', (e) => [e.kind], cap, { order: ['weapon', 'offhand', 'armor', 'accessory'] }),
@@ -281,7 +285,8 @@ const GEAR_TABS = [
     set('bonus', 'Bonuses', (e) => e.bonuses.map((b) => normText(b.text)), (v) => v, { wide: true, hint: '# stands for the value, which varies per item' }),
     range('bonusN', 'Number of bonuses', (e) => e.bonuses.length),
     set('ench', 'Enchantments', (e) => e.enchantments.map((b) => normText(b.text)), (v) => v, { wide: true }),
-    range('enchN', 'Number of enchantments', (e) => e.enchantments.length),
+    range('enchN', 'Enchantments applied', (e) => realEnch(e).length),
+    range('enchEmpty', 'Empty enchantment slots', emptyEnch),
   ] },
 ];
 const GEAR_SORTS = [
@@ -306,7 +311,7 @@ function statChips(e) {
 }
 const GEAR = {
   key: 'gear', label: 'Gear', tabs: GEAR_TABS, sorts: GEAR_SORTS,
-  search: (e) => `${e.name} ${e.typeName} ${e.id} ${e.displayId}`,
+  search: (e) => `${e.name} ${e.typeName} ${e.id} ${gearId(e)}`,
   render(e) {
     const card = el('article', 'gcard');
     card.style.setProperty('--rc', `var(--r-${gr(e)})`);
@@ -314,7 +319,7 @@ const GEAR = {
     const img = document.createElement('img'); img.src = e.image; img.alt = ''; img.loading = 'lazy'; img.width = 64; img.height = 64;
     img.onerror = () => { img.style.visibility = 'hidden'; };
     const head = el('div', 'ghead');
-    head.append(el('div', 'gkind', `${e.typeName} · ${cap(gr(e))}`), el('h3', 'gname', e.name), el('div', 'gid', `#${e.id} · lv ${e.equipRequirement}+`));
+    head.append(el('div', 'gkind', `${e.typeName} · ${cap(gr(e))}`), el('h3', 'gname', e.name), el('div', 'gid', `#${gearId(e)} · lv ${e.equipRequirement}+`));
     top.append(img, head); card.append(top);
     const chips = statChips(e);
     if (chips.length) {
@@ -326,10 +331,12 @@ const GEAR = {
     const bar = el('span', 'bar'); const fill = el('i'); fill.style.width = `${e.maxDurability ? (e.durability / e.maxDurability) * 100 : 0}%`; bar.append(fill);
     dur.append(el('span', 'k', 'DUR'), bar, el('span', 'v', `${e.durability}/${e.maxDurability} · ${e.remainingRepairs}/${e.maxRepairs} rep`));
     card.append(dur);
-    if (e.bonuses.length || e.enchantments.length) {
+    const ench = realEnch(e), empty = emptyEnch(e);
+    if (e.bonuses.length || ench.length || empty) {
       const ul = el('ul', 'gbon');
       e.bonuses.forEach((b) => ul.append(el('li', null, b.text)));
-      e.enchantments.forEach((b) => ul.append(el('li', 'ench', b.text)));
+      ench.forEach((b) => ul.append(el('li', 'ench', b.text)));
+      if (empty) ul.append(el('li', 'empty', `${empty} empty enchantment slot${empty > 1 ? 's' : ''}`));
       card.append(ul);
     }
     const eq = el('div', 'gequip');
@@ -347,7 +354,7 @@ const GEAR = {
     return [
       ['Weapons', n((e) => e.kind === 'weapon')], ['Offhands', n((e) => e.kind === 'offhand')], ['Armor', n((e) => e.kind === 'armor')],
       ['Accessories', n((e) => e.kind === 'accessory')], ['On heroes', n((e) => e.equippedTo)], ['Mythic', n((e) => gr(e) === 'mythic')],
-      ['Enchanted', n((e) => e.enchantments.length)],
+      ['Enchanted', n((e) => realEnch(e).length)], ['Open slots', n((e) => emptyEnch(e))],
     ];
   },
   rarity: gr,

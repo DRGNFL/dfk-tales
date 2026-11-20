@@ -120,6 +120,8 @@
 .gbon li { padding-left: 12px; position: relative; }
 .gbon li::before { content: ""; position: absolute; left: 0; top: .6em; width: 5px; height: 5px; background: var(--line-2); }
 .gbon li.ench::before { background: var(--red); }
+.gbon li.empty { color: var(--muted); }
+.gbon li.empty::before { background: transparent; border: 1px solid var(--line-2); width: 3px; height: 3px; }
 
 /* items */
 .grid.item { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
@@ -146,7 +148,8 @@
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, 300px); gap: 20px; justify-content: start; }
 .slot { white-space: pre-line; width: 300px; height: 430px; border: 1px solid var(--line); background: repeating-linear-gradient(135deg, #070707 0 8px, #0b0b0b 8px 16px); display: grid; place-items: center; color: var(--muted); font: 11.5px var(--mono); text-align: center; padding: 16px; }
-.slot.live { border: 0; background: none; padding: 0; display: block; }
+.slot.live { border: 0; background: none; padding: 0; display: block; text-align: left; white-space: normal; }
+.gcard, .icard { width: 100%; }
 .void { padding: 70px 0; display: grid; gap: 10px; }
 .void[hidden] { display: none; }
 .void h2 { font: 700 clamp(30px, 5vw, 54px)/1 var(--display); text-transform: uppercase; margin: 0; }
