@@ -285,15 +285,15 @@ function petCard(entry) {
     const eq = q('[class*="equippedIcons"]'); if (eq) eq.style.display = 'none';
     root.querySelectorAll('.dfk-heroCardFront .dfk-specials .dfk-icon').forEach((ic, i) => { if (i > 0) ic.style.display = 'none'; });
     setOwnText(q('.dfk-class'), p.species ? p.species.family : 'Pet');
-    setOwnText(q('.dfk-class .dfk-subClass'), `${cap(p.eggType)} egg · ${cap(p.profession)}`);
+    setOwnText(q('.dfk-class .dfk-subClass'), `${cap(p.eggType)} egg`);
     setOwnText(q('.dfk-level'), `Season ${p.season}`);
     setOwnText(q('.dfk-level .dfk-subClass'), p.shiny ? 'Shiny' : cap(p.element));
     const rows = [['.dfk-statSummons', '.dfk-summonsBar', '.dfk-summonsAmount', p.gathering, 'Gathering'], ['.dfk-statStamina', '.dfk-staminaBar', '.dfk-staminaAmount', p.crafting, 'Crafting'], ['.dfk-statXp', '.dfk-xpBar', '.dfk-xpAmount', p.combat, 'Combat']];
     for (const [row, bar, amt, b, kind] of rows) {
-      const name = b ? (b.revealed ? b.name : `${kind} (hidden)`) : `No ${kind.toLowerCase()} bonus`;
+      const name = b ? (b.revealed ? b.name : 'Unrevealed') : `No ${kind.toLowerCase()}`;
       setOwnText(q(row), name.length > 18 ? `${name.slice(0, 17)}…` : name);
       const bb = q(bar); if (bb) bb.style.width = `${b ? (b.tier / 3) * 100 : 0}%`;
-      setOwnText(q(amt), b ? stars(b.tier) : '—');
+      const am = q(amt); if (am) am.textContent = b ? stars(b.tier) : '—';
     }
     const hp = q('.dfk-heroHealth'), mp = q('.dfk-heroMana');
     const total = (p.gathering ? p.gathering.tier : 0) + (p.crafting ? p.crafting.tier : 0) + (p.combat ? p.combat.tier : 0);
