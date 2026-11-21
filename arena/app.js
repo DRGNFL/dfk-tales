@@ -3,7 +3,7 @@ import {
   HeroRenderer, HERO_ANIMATIONS, getHeroWeaponAnimationSet, weaponAnimation, createAnimatedHeroCard,
 } from 'https://esm.sh/@defikingdoms/game-sdk@0.1.0/renderer?deps=ethers@5.8.0';
 import { mountWallet, readLegion } from '../assets/session.js?v=1';
-import { readSquad, onSquadChange, setSkills, isComplete } from '../assets/squad.js?v=3';
+import { readSquad, onSquadChange, setSkills, isComplete, setCap, CAPS } from '../assets/squad.js?v=4';
 import { heroLook, heroKey, onArmoryChange } from '../assets/armory.js?v=1';
 import { hookCardIcons } from '../assets/equip-ui.js?v=1';
 import { ACT_AT, makeRng, codexBudget } from './engine.js?v=1';
@@ -12,6 +12,7 @@ import { CLASS_SKILLS } from './skills.js?v=3';
 import * as AI from './ai.js?v=2';
 import { traitsOf } from './traits.js?v=2';
 import { svg, iconOf, imgOf, classImg, statusImg } from './icons.js?v=2';
+import * as VFX from './vfx.js?v=1';
 
 const $ = (s) => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
@@ -37,7 +38,8 @@ let geo = { W: 0, H: 0, u: 0 };
 
 /* ================= scenes =================
    Every scene of the game's hero cards: 55 x 52 pixel art, most of them animated GIFs, a few with a front layer
-   (grass, fog, snow) drawn over the heroes' feet. Our own scenes will go in SCENES with dir, w and h. */
+   (grass, fog, snow) drawn over the heroes' feet; the light beams and the mist are drawn faint, as on the card
+   (frontOpacity: the card's CSS has 0.1 and 0.2). Our own scenes will go in SCENES with dir, w and h. */
 const BG = `${getAssetConfig().assetsBaseUrl}/hero-card/assets/images/hero/backgrounds/`;
 const SCENES = [
   { id: 'colosseum', name: 'Colosseum', base: 'colosseum.gif', group: 'card' },
@@ -55,8 +57,8 @@ const SCENES = [
   { id: 'snowtown', name: 'Snow Town', base: 'city-back.gif', group: 'back' },
   { id: 'peaks', name: 'Snow Peaks', base: 'arctic-back.gif', front: 'arctic-front.gif', group: 'back' },
   { id: 'lake', name: 'Lilac Lake', base: 'island-back.gif', group: 'back' },
-  { id: 'cave', name: 'Cave Mouth', base: 'mountains-back.png', front: 'mountains-front.gif', group: 'back' },
-  { id: 'darkwood', name: 'Misty Woods', base: 'swamp-back.gif', front: 'swamp-front.gif', group: 'back' },
+  { id: 'cave', name: 'Cave Mouth', base: 'mountains-back.png', front: 'mountains-front.gif', frontOpacity: 0.1, group: 'back' },
+  { id: 'darkwood', name: 'Misty Woods', base: 'swamp-back.gif', front: 'swamp-front.gif', frontOpacity: 0.2, group: 'back' },
   { id: 'mine', name: 'Mine', base: 'mining.gif', front: 'mining-front-gold.png', group: 'work' },
   { id: 'farm', name: 'Farm', base: 'gardening.gif', front: 'gardening-front.gif', group: 'work' },
   { id: 'woods', name: 'Woods', base: 'foraging.png', front: 'foraging-front.gif', group: 'work' },
@@ -133,7 +135,7 @@ function kitOf(h, ch) {
 
 /* ================= setup: your squad, the card, the Codex ================= */
 const skillsOf = (slot) => slot.skills || C.defaultLoadout(slot.hero);
-let tab = 0;
+let tab = Math.max(0, Math.min(2, (Number(new URLSearchParams(location.search).get('p')) || 1) - 1)); // ?p=2: back from picking P2
 let said = null; // the Codex skill last read, kept across redraws
 
 function renderSetup() {
@@ -145,9 +147,10 @@ function renderSetup() {
   const n = mine.filter(Boolean).length;
   $('#btn-fight').disabled = !ok;
   $('#status').textContent = ok ? `Level cap ${s.cap}. One Codex skill per tier, then Fight: the AI drafts three heroes near your level and plays them.`
-    : n === 0 ? 'No squad yet: open the Legion Viewer and press Arena squad.'
-    : `${n} of 3 heroes${n === 3 ? `, but someone is above the level cap ${s.cap}` : ''}. Finish the squad in the Legion Viewer.`;
+    : n === 0 ? 'No squad yet: press "Choose a hero" on P1, then P2 and P3.'
+    : `${n} of 3 heroes${n === 3 ? `, but someone is above the level cap ${s.cap}: change them` : ': choose the others'}.`;
   renderScenes();
+  renderCaps(s);
   renderTabs(s);
   const slot = mine[tab];
   $('#editor').hidden = !slot;
@@ -169,7 +172,7 @@ function renderScenes() {
     if (group && x.group !== group) box.append(el('span', 'sc-sep'));
     group = x.group;
     const b = el('button', 'sc'); b.type = 'button'; b.title = x.name; b.setAttribute('aria-label', x.name);
-    b.style.backgroundImage = [x.front && `url("${sceneUrl(x, x.front)}")`, `url("${sceneUrl(x, x.base)}")`].filter(Boolean).join(', ');
+    b.style.backgroundImage = [x.front && !x.frontOpacity && `url("${sceneUrl(x, x.front)}")`, `url("${sceneUrl(x, x.base)}")`].filter(Boolean).join(', ');
     b.setAttribute('aria-pressed', String(x.id === cur));
     b.addEventListener('click', () => choose(x.id));
     box.append(b);
@@ -181,16 +184,24 @@ function renderScenes() {
   box.append(r);
 }
 
+/* Your three places. A place is chosen the old DFK way: select it, then pick the hero in the Legion Viewer. */
+const LV = new URL('../legion-viewer/', location.href).href;
+const pickUrl = (i) => `${LV}?pick=${i + 1}`;
 function renderTabs(s) {
   const box = $('#tabs');
   box.replaceChildren();
   s.teams.A.forEach((slot, i) => {
     const over = slot && slot.hero.level > s.cap;
-    const b = el('button', `tab${slot ? '' : ' empty'}${over ? ' over' : ''}`); b.type = 'button';
+    const b = el('div', `tab${slot ? '' : ' empty'}${over ? ' over' : ''}`);
+    b.tabIndex = 0;
     b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(i === tab));
     b.append(el('span', 'pp', `P${i + 1}`));
     const info = el('span');
-    if (!slot) info.append(el('b', null, 'Empty'), el('small', null, 'add a hero in the Legion Viewer'));
+    const chg = el('a', 'chg', slot ? '⇄ Change' : '+ Choose a hero');
+    chg.href = pickUrl(i);
+    chg.title = `Choose the hero for P${i + 1} in the Legion Viewer`;
+    chg.addEventListener('click', (e) => e.stopPropagation());
+    if (!slot) info.append(el('b', null, 'Empty'), chg);
     else {
       const h = slot.hero;
       const nb = el('b'); nb.append(img(classImg(h.class)), h.name);
@@ -199,11 +210,26 @@ function renderTabs(s) {
       const list = CODEX(h.class);
       if (list) for (const id of skillsOf(slot)) { const sk = list.find((x) => x.id === id); const u = sk && imgOf(sk); if (u) { const im = img(u); im.title = sk.name; picks.append(im); } }
       info.append(picks);
+      b.append(chg);
     }
-    b.append(info);
-    b.addEventListener('click', () => { if (slot) { tab = i; said = null; renderSetup(); } });
+    b.prepend(info); b.prepend(b.querySelector('.pp'));
+    const go = () => { if (!slot) { location.href = pickUrl(i); return; } if (tab === i) return; tab = i; said = null; renderSetup(); };
+    b.addEventListener('click', go);
+    b.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
     box.append(b);
   });
+}
+
+/* The level cap of the squad: 10, 12, 15 or 20, as in DFK's PvP. */
+function renderCaps(s) {
+  const box = $('#caps');
+  box.querySelectorAll('button').forEach((n) => n.remove());
+  for (const c of CAPS) {
+    const b = el('button', null, `Lv ${c}`); b.type = 'button';
+    b.setAttribute('aria-pressed', String(c === s.cap));
+    b.addEventListener('click', () => setCap(c));
+    box.append(b);
+  }
 }
 
 /* The hero's own card, open, with the seven slot icons that equip it. Rebuilt only when the hero or its gear changes. */
@@ -445,6 +471,8 @@ async function startBattle(s) {
   b.fighters.filter((f) => f.luckyStart).forEach((f) => log(`${f.name} starts lucky: triple Initiative.`, 'sys'));
   buildField(looks); buildPlates(); buildTimebar();
   layoutField();
+  VFX.preload(['basicImpact', 'magicBlast', 'arcSlash', 'archerDefaultAttack', 'healImpact', 'secondLifeImpact', ...Object.values(VFX.STATUS).map((x) => x[0]), 'barrier', 'wardFront', 'channelingFront']);
+  for (const f of b.fighters) for (const sk of [...f.skills, ...f.traitActives]) VFX.preloadSkill(sk.name);
   turnLine(null);
   showHand(C.teamOf(b, 'A')[0], false);
   paint();
@@ -482,12 +510,14 @@ function layoutField() {
   field.style.setProperty('--u', `${geo.u}px`);
   tileScene();
   place();
+  if (battle) battle.fighters.forEach((f) => loops(f, true));
 }
 function tileScene() {
   const { W, H } = geo;
   for (const [id, file] of [['#scene-back', scene && scene.base], ['#scene-front', scene && scene.front]]) {
     const box = $(id);
     box.replaceChildren();
+    if (id === '#scene-front') box.style.opacity = scene && scene.frontOpacity ? String(scene.frontOpacity) : '';
     if (!file) continue;
     const url = `url("${sceneUrl(scene, file)}")`;
     const tw = H * (scene.w || 55) / (scene.h || 52);
@@ -536,14 +566,15 @@ function buildPlates() {
   for (const team of ['A', 'B']) $(`#side-${team.toLowerCase()}`).replaceChildren();
   for (const f of battle.fighters) {
     const p = el('button', 'plate'); p.type = 'button';
-    const pt = el('div', 'pt'); const pc = el('canvas'); pc.width = 44; pc.height = 44; pt.append(pc);
+    const pt = el('div', 'pt'); const pc = el('canvas'); pc.width = 48; pc.height = 48; pt.append(pc);
     const info = el('div');
     const nm = el('div', 'nm');
     const ci = img(classImg(f.cls));
-    if (f.team === 'B') nm.append(el('small', null, ''), f.name.split(' ')[0], ci); else nm.append(ci, f.name.split(' ')[0], el('small', null, ''));
+    if (f.team === 'B') nm.append(f.name.split(' ')[0], ci); else nm.append(ci, f.name.split(' ')[0]);
     info.append(nm, bar('hp'), bar('mp'));
     if (f.cls === 'wizard') info.append(bar('ap'));
     info.append(el('div', 'tags'));
+    p.classList.toggle('wiz', f.cls === 'wizard');
     p.append(pt, info);
     p.addEventListener('click', () => onFighterClick(f));
     tipOn(p, () => { if (!battle) return; const sh = C.sheet(battle, f); showTip(p, f.name, `${cap(f.hero.class)} · Lv ${f.level} · P${f.pos} · ${f.weapon.name}${f.weapon.loaned ? ' (loaned)' : ''}`, `HP ${fmt(f.hp)} / ${fmt(f.hpMax)} · MP ${fmt(f.mp)} / ${fmt(f.mpMax)}${f.cls === 'wizard' ? ` · Arcane Power ${f.ap} / ${C.AP_MAX}` : ''} · ATK ${fmt(sh.attack)} · SPELL ${fmt(sh.spell)} · P.DEF ${fmt(sh.pdef)} · M.DEF ${fmt(sh.mdef)} · EVA ${pct(sh.evasion)} · CRIT ${pct(sh.crit)} · Speed ${sh.speed.toFixed(1)}`, C.tags(f).map((t) => t.name).join(' · ') || null); });
@@ -551,12 +582,19 @@ function buildPlates() {
     $(`#side-${f.team.toLowerCase()}`).append(p);
   }
 }
-function bar(cls) { const d = el('div', `bar ${cls}`); d.append(el('i'), el('u')); return d; }
-function setBar(node, cls, v, max, extra) {
-  const d = node.querySelector(`.bar.${cls}`);
-  if (!d) return;
-  d.querySelector('i').style.width = `${max ? Math.max(0, Math.min(100, (v / max) * 100)) : 0}%`;
-  d.querySelector('u').style.width = `${extra && max ? Math.min(100, (extra / max) * 100) : 0}%`;
+/* A bar with its number beside it: HP, MP, and the Wizard's Arcane Power. */
+function bar(cls) {
+  const row = el('div', `bx ${cls}`);
+  const d = el('div', `bar ${cls}`); d.append(el('i'), el('u'));
+  row.append(d, el('span', 'v'));
+  return row;
+}
+function setBar(node, cls, v, max, extra, label) {
+  const row = node.querySelector(`.bx.${cls}`);
+  if (!row) return;
+  row.querySelector('i').style.width = `${max ? Math.max(0, Math.min(100, (v / max) * 100)) : 0}%`;
+  row.querySelector('u').style.width = `${extra && max ? Math.min(100, (extra / max) * 100) : 0}%`;
+  row.querySelector('.v').textContent = label != null ? label : fmt(v);
 }
 
 function buildTimebar() {
@@ -586,13 +624,13 @@ function paint() {
     f.plate.classList.toggle('shown', f.id === handId);
     f.plate.style.order = f.pos;
     const barrier = f.fx.find((e) => e.key === 'barrier');
-    setBar(f.plate, 'hp', f.hp, f.hpMax, barrier ? barrier.value : 0);
+    setBar(f.plate, 'hp', f.hp, f.hpMax, barrier ? barrier.value : 0, barrier ? `${fmt(f.hp)}+${fmt(barrier.value)}` : null);
     setBar(f.plate, 'mp', f.mp, f.mpMax);
-    setBar(f.plate, 'ap', f.ap || 0, C.AP_MAX);
-    f.plate.querySelector('.nm small').textContent = `${fmt(f.hp)}`;
+    setBar(f.plate, 'ap', f.ap || 0, C.AP_MAX, 0, `AP ${f.ap || 0}`);
+    loops(f);
     f.plate.querySelector('.tags').replaceChildren(...C.tags(f).map(tagNode));
-    drawHead(f, f.portrait);
-    drawHead(f, f.markerCanvas);
+    // While a hero acts its rig may be loading a new animation (a blank frame): keep its last portrait.
+    if (!(b.busy && b.turn === f)) { drawHead(f, f.portrait); drawHead(f, f.markerCanvas); }
   }
   $('#tick').textContent = `tick ${b.tick}`;
 }
@@ -645,6 +683,7 @@ function showEvents(events) {
       const src = byId(e.source);
       log(`${nameOf(e.source)}: ${e.skill}${e.target ? ` → ${nameOf(e.target)}` : ''}`, 'hit', src && src.team);
       if (e.delayed && src) floatText(src, e.skill.replace(' (delayed)', ''), 'st good', bump(e.source));
+      if (e.delayed) { const name = e.skill.replace(' (delayed)', ''); const d = VFX.skillFx(`Delay: ${name}`) || VFX.skillFx(name); const fx = d && (d.hitEffectFront || d.globalHitEffectFront); const t = e.target && byId(e.target); if (fx && t) VFX.play(t.node, fx, fxOpts(t, { delay: 0 })); }
       continue;
     }
     if (e.type === 'damage') {
@@ -659,6 +698,7 @@ function showEvents(events) {
     else if (e.type === 'ko') { playAnim(t, HERO_ANIMATIONS.down, false); log(e.rising ? `${t.name} falls…` : `${t.name} is down.`, 'ko'); }
     else if (e.type === 'revive') {
       if (e.tag) floatText(t, e.tag, 'st good', bump(t.id));
+      VFX.play(t.node, ['secondLifeImpact', 0.2, 'NORMAL', 0, 58, 76, 0, 0, 1], fxOpts(t));
       if (hasAnim(t, HERO_ANIMATIONS.getUp)) { playAnim(t, HERO_ANIMATIONS.getUp, false); setTimeout(() => t.alive && !b.stopped && playAnim(t, t.idle, true), (t.renderer.duration(HERO_ANIMATIONS.getUp) || 1) * 1000); }
       else playAnim(t, t.idle, true);
       log(e.text, 'hit');
@@ -670,10 +710,10 @@ function showEvents(events) {
 }
 
 /* Play the actor's animation and show the results when the blow lands (the rig's hit marker, or about two thirds in). */
-async function animate(f, events, anim) {
+async function animate(f, events, anim, onLand) {
   const b = battle;
   let landed = false;
-  const land = () => { if (landed || b.stopped) return; landed = true; showEvents(events); paint(); };
+  const land = () => { if (landed || b.stopped) return; landed = true; if (onLand) onLand(); showEvents(events); paint(); };
   if (anim) {
     const dur = f.renderer.duration(anim) || 1.2;
     f.onHit = land;
@@ -692,6 +732,78 @@ function animFor(f, s, phase) {
   const hits = s.target === 'enemy' || (s.target === 'none' && !/heal|barrier|shell/i.test(s.text));
   return pickAnim(f, [s.anim, hits ? weaponAnimation(set, 'Hit') : weaponAnimation(set, 'Cast'), hits ? null : HERO_ANIMATIONS.shout].filter(Boolean));
 }
+/* ---------- the game's effects ---------- */
+const fxOpts = (x, extra) => ({ u: geo.u, zoom: ZOOM, side: x.team, ...extra });
+const IMPACT = ['basicImpact', 0.2, 'NORMAL', 0, 60, 78, 1, 0, 2];
+const MAGIC_IMPACT = ['magicBlast', 0.2, 'NORMAL', 0, 72, 87, 1, 0, 2];
+const HEAL_IMPACT = ['healImpact', 0.2, 'NORMAL', 0, 52, 76, 0, 0, 1];
+/* Who an action touched: hit, missed, healed or given a status. */
+function touched(events) {
+  const all = [], dmg = [], heal = [];
+  for (const e of events) {
+    const t = e.target && byId(e.target);
+    if (!t) continue;
+    if (['damage', 'miss', 'heal', 'status'].includes(e.type) && !all.includes(t)) all.push(t);
+    if (e.type === 'damage' && !dmg.includes(t)) dmg.push(t);
+    if (e.type === 'heal' && e.amount > 0 && !heal.includes(t)) heal.push(t);
+  }
+  return { all, dmg, heal };
+}
+/* Basic Attack: the swing on the attacker; the impact on the target when the blow lands. */
+function fxBasic(f) {
+  if (f.weapon.kind === 'melee') VFX.play(f.node, ['arcSlash', 0.2, 'NORMAL', 0.3, 22, 76, 0, 0, 0], fxOpts(f, { back: true }));
+  else if (!f.weapon.magic) VFX.play(f.node, ['archerDefaultAttack', 0.2, 'NORMAL', 0.2, 93, 72, 1, 0, 61], fxOpts(f));
+}
+const fxImpacts = (f, events) => () => {
+  const hit = touched(events);
+  for (const t of hit.dmg) VFX.play(t.node, f.weapon.magic ? MAGIC_IMPACT : IMPACT, fxOpts(t));
+};
+/* A skill: the game's own effects for it, timed from the start of the hero's animation as in the game.
+   Without data, a plain impact on whoever was hit and a glow on whoever was healed. Returns what to do when it lands. */
+function fxSkill(f, s, events, primary) {
+  const hit = touched(events);
+  const d = VFX.skillFx(s.name);
+  if (!d) return () => { for (const t of hit.dmg) VFX.play(t.node, s.magic ? MAGIC_IMPACT : IMPACT, fxOpts(t)); for (const t of hit.heal) VFX.play(t.node, HEAL_IMPACT, fxOpts(t)); };
+  const side = hit.all[0] ? hit.all[0].team : s.target === 'enemy' ? (f.team === 'A' ? 'B' : 'A') : f.team;
+  for (const [k, fx] of Object.entries(d)) {
+    const back = /Back$/.test(k);
+    if (/^(secondary)?[aA]ttackEffect/.test(k)) VFX.play(f.node, fx, fxOpts(f, { back }));
+    else if (/^global/.test(k) && String(fx[9] || '').includes('S')) {
+      const team = C.teamOf(battle, side);
+      const mid = team.find((x) => x.pos === 2) || team[0];
+      if (mid) VFX.play(mid.node, fx, fxOpts(mid, { back }));
+    } else {
+      const list = /^global/.test(k) || !primary ? hit.all : [primary];
+      for (const t of list.length ? list : primary ? [primary] : []) VFX.play(t.node, fx, fxOpts(t, { back }));
+    }
+  }
+  return null;
+}
+/* The loops on a hero: one status at a time, in turn every 2.2 s as in the game; a barrier, a ward and a channel on their own. */
+const LOOP_KEY = { stun: 'stun', daze: 'dazed', taunt: 'taunt', intimidate: 'intimidate', silence: 'silence', bleed: 'bleed', exhaust: 'exhausted', root: 'root', blind: 'blind', slow: 'slow', poison: 'poison', confuse: 'confuse', fear: 'fear', burn: 'burn', chill: 'chill', berserk: 'berserk', bmark: 'berserksMark', haste: 'haste', beacon: 'holybeacon', holyLight: 'holylight', hunterMark: 'huntersmark', unstoppable: 'unstoppable' };
+const CHANNEL_LOOP = ['channelingFront', 46, 84, 0.2, 'NORMAL'];
+function loops(f, force = false) {
+  if (!geo.u || !f.node) return;
+  const list = f.alive ? [...new Set(f.fx.map((e) => LOOP_KEY[e.key]).filter(Boolean))] : [];
+  const sig = list.join('|');
+  if (force || sig !== f.loopSig) { f.loopSig = sig; f.loopList = list; f.loopIdx = 0; showLoop(f); }
+  steady(f, 'barrierEl', f.alive && f.fx.some((e) => e.key === 'barrier'), VFX.LOOPS.barrier, force);
+  steady(f, 'wardEl', f.alive && f.fx.some((e) => e.key === 'ward'), VFX.LOOPS.ward, force);
+  steady(f, 'chEl', f.alive && !!f.channel, CHANNEL_LOOP, force);
+}
+function showLoop(f) {
+  if (f.loopEl) f.loopEl.remove();
+  f.loopEl = null;
+  const k = f.loopList && f.loopList.length ? f.loopList[f.loopIdx % f.loopList.length] : null;
+  const st = k && VFX.STATUS[k];
+  if (st) f.loopEl = VFX.play(f.node, [st[0], st[3], 'NORMAL', 0, st[1], st[2], 0, 0, 60], fxOpts(f, { loop: true }));
+}
+function steady(f, key, on, def, force) {
+  if (f[key] && (force || !on)) { f[key].remove(); f[key] = null; }
+  if (on && !f[key]) f[key] = VFX.play(f.node, [def[0], def[3], def[4], 0, def[1], def[2], 0, 0, 60], fxOpts(f, { loop: true }));
+}
+setInterval(() => { if (!battle) return; for (const f of battle.fighters) if (f.loopList && f.loopList.length > 1) { f.loopIdx += 1; showLoop(f); } }, 2200);
+
 /* Risings (Second Life) after an action: show them and give them a moment. */
 async function after(events) { if (!events || !events.length) return; showEvents(events); paint(); await sleep(1100); }
 
@@ -710,8 +822,10 @@ async function runLoop() {
     if (f.channel) {
       const s = f.channel.skill;
       b.turn = f; b.live = null; turnLine(f, f.team === 'A' ? `completes ${s.name}` : 'completes a channel'); paint();
+      const chTarget = f.channel.target ? byId(f.channel.target) : null;
       const ev = C.completeChannel(b, f);
-      await animate(f, ev, animFor(f, s));
+      const onLand = fxSkill(f, s, ev, chTarget);
+      await animate(f, ev, animFor(f, s), onLand);
       if (ev.some((e) => e.type === 'revive')) await sleep(1000);
       b.turn = null; refreshHand(); paint();
       continue;
@@ -809,6 +923,7 @@ function renderHand(f, live) {
   groups.classList.remove('locked');
   const hl = $('#handline');
   hl.replaceChildren(img(classImg(f.cls)), el('span', null, f.name), el('em', live ? 'live' : null, live ? 'your move' : !f.alive ? 'down' : b.turn === f ? 'acting' : 'waiting'));
+  if (f.cls === 'wizard') { const ap = el('strong', 'apchip'); ap.append('AP ', el('b', null, String(f.ap || 0)), ` / ${C.AP_MAX}`); ap.title = 'Arcane Power: the X of the X skills (up to 30) and the unlocks'; hl.append(ap); }
   const pad = (box) => { while (box.children.length % 4) box.append(el('span', 'tile empty')); };
   const ok = (t) => live && !b.busy && !t.classList.contains('off');
 
@@ -871,6 +986,7 @@ function actTile(f, s, live, kind) {
   const noTarget = needs && !targets.length;
   if (kind) t.append(el('span', 'tag', kind === 'pet' ? 'P' : 'T'));
   if (!s.trait) t.append(el('span', 'mp', s.ap ? `${C.manaCost(f, s)}·${s.ap}` : String(C.manaCost(f, s))));
+  if (s.apX) t.append(el('span', 'apx', `X${Math.min(30, f.ap || 0)}`));
   if (!s.trait && f.cd[s.id] > 0) t.append(el('span', 'cd', String(f.cd[s.id])));
   if (s.trait && f.used[s.id]) t.append(el('span', 'cd', '×'));
   if (blocked || noTarget) t.classList.add('off');
@@ -933,7 +1049,8 @@ async function doAttack(f, t) {
   b.busy = true; b.live = null; hideTip(); clearTargets(); lockHand(f);
   turnLine(f, f.team === 'A' ? 'Basic Attack' : null);
   const events = C.basicAttack(b, f, t);
-  await animate(f, events, animFor(f, null));
+  fxBasic(f);
+  await animate(f, events, animFor(f, null), fxImpacts(f, events));
   if (b.stopped) return;
   finishAction(f, 'action');
 }
@@ -943,7 +1060,8 @@ async function doSkill(f, s, t) {
   b.busy = true; b.live = null; hideTip(); clearTargets(); lockHand(f);
   turnLine(f, f.team === 'A' ? s.name : null);
   const events = C.useSkill(b, f, s, t);
-  await animate(f, events, animFor(f, s, s.channel ? 'channel' : null));
+  const onLand = s.channel ? null : fxSkill(f, s, events, t);
+  await animate(f, events, animFor(f, s, s.channel ? 'channel' : null), onLand);
   if (b.stopped) return;
   finishAction(f, 'action', s);
 }

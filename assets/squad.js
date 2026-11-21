@@ -55,6 +55,20 @@ export function toggleHero(h, kit = {}) {
   return done(s, `${h.name} is in the squad at P${i + 1}${got.length ? `, with ${got.join(', ')}` : ''}.`);
 }
 
+/* Put a hero in slot i (0..2): picked in the Legion Viewer for that place. If it is already in another slot,
+   the two heroes swap places. Returns { ok, msg }. */
+export function placeHero(i, h) {
+  const s = readSquad();
+  if (h.level > s.cap) return { ok: false, msg: `${h.name} is level ${h.level}: above the level cap ${s.cap}.` };
+  const there = findHero(s, h);
+  const prev = s.teams.A[i];
+  if (there && there.i === i) return { ok: true, msg: `${h.name} stays at P${i + 1}.` };
+  if (there) { s.teams.A[there.i] = prev; s.teams.A[i] = there.slot; s.sel = { team: 'A', i }; return done(s, `${h.name} moves to P${i + 1}${prev ? `, ${prev.hero.name} to P${there.i + 1}` : ''}.`); }
+  s.teams.A[i] = { hero: clean(h), pet: null, weapon: null, armor: null, offhand: null, accessory: null, skills: null };
+  s.sel = { team: 'A', i };
+  return done(s, `${h.name} is in the squad at P${i + 1}.`);
+}
+
 /* Give a pet or a piece of gear to the selected hero (or take it back). field: pet | weapon | armor | offhand | accessory. */
 export function toggleItem(x, field) {
   const s = readSquad();

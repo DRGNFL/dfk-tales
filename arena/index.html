@@ -6,7 +6,7 @@
 <title>Arena · DFK Tales</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500&family=JetBrains+Mono:wght@400;600&display=swap">
 <link rel="stylesheet" href="../assets/tales.css?v=13">
 <style>
 /* Practice arena: your squad against the computer's. One red for the enemy side and for every hit. */
@@ -22,6 +22,10 @@ a.btn:hover { border-color: var(--text); }
 /* ---------- setup ---------- */
 .su-head { display: flex; justify-content: space-between; align-items: end; gap: 14px; flex-wrap: wrap; }
 button.fight { padding: 14px 30px; font-size: 15px; letter-spacing: .22em; }
+.seg { display: inline-flex; align-items: stretch; border: 1px solid var(--line-2); margin-right: 8px; }
+.seg > span { font: 600 10px var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); padding: 0 10px; display: flex; align-items: center; }
+.seg button { border: 0; border-left: 1px solid var(--line-2); padding: 12px 14px; background: var(--panel-2); }
+.seg button[aria-pressed="true"] { background: var(--text); color: #000; }
 
 /* The arena's scene: every scene of the game's cards, as small tiles. */
 .scenes { display: flex; gap: 5px; align-items: center; overflow-x: auto; padding: 2px 0 6px; scrollbar-width: thin; }
@@ -36,7 +40,10 @@ button.fight { padding: 14px 30px; font-size: 15px; letter-spacing: .22em; }
 /* Your three heroes, one tab each. */
 .tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 @media (max-width: 700px) { .tabs { grid-template-columns: 1fr; } }
-.tab { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: center; padding: 9px 12px; text-align: left; text-transform: none; letter-spacing: 0; background: var(--panel); border: 1px solid var(--line); color: var(--text); font: inherit; }
+.tab { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: center; padding: 9px 12px; text-align: left; background: var(--panel); border: 1px solid var(--line); color: var(--text); cursor: pointer; }
+.tab .chg { position: absolute; top: 8px; right: 8px; padding: 5px 9px; border: 1px solid var(--line-2); background: #000; color: var(--text); text-decoration: none; font: 600 10.5px var(--display); letter-spacing: .12em; text-transform: uppercase; }
+.tab .chg:hover { border-color: var(--red); color: #fff; background: var(--red); }
+.tab.empty .chg { position: static; justify-self: start; margin-top: 4px; border-color: var(--red); background: var(--red); color: #fff; }
 .tab:hover { border-color: #555; }
 .tab[aria-selected="true"] { border-color: var(--text); background: #121212; box-shadow: inset 0 -3px 0 var(--red); }
 .tab .pp { font: 700 24px var(--display); color: #555; }
@@ -114,7 +121,10 @@ body.in-battle { overflow: hidden; }
 .scene.front { z-index: 3; }
 .field .shade { position: absolute; inset: 0; z-index: 2; background: linear-gradient(180deg, rgba(0, 0, 0, .38), rgba(0, 0, 0, 0) 34%); pointer-events: none; }
 .ftr { position: absolute; pointer-events: none; transition: left .35s ease; }
-.ftr canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.ftr canvas { position: absolute; z-index: 2; inset: 0; width: 100%; height: 100%; }
+/* The game's effects: sprite strips over (or behind) a hero. */
+.vfx { position: absolute; z-index: 4; pointer-events: none; background-repeat: no-repeat; image-rendering: pixelated; }
+.vfx.back { z-index: 1; }
 .ftr.a canvas { transform: scaleX(-1); }
 .ftr .body { position: absolute; left: 39%; right: 39%; top: 56%; bottom: 5%; padding: 0; border: 0; background: none; cursor: default; pointer-events: auto; z-index: 4; }
 .ftr.can .body, .ftr.mine .body { cursor: pointer; }
@@ -128,13 +138,13 @@ body.in-battle { overflow: hidden; }
 .ftr.ally .chance { background: #e8e8e8; color: #000; }
 .ftr .chance:empty { display: none; }
 
-/* Damage in big battle numbers: they pop, then rise and fade. */
-.float { position: absolute; z-index: 6; left: 50%; top: 55%; transform: translate(-50%, 0); font: 400 calc(var(--u) * .064)/1 "Bungee", var(--display); color: #fff;
-  -webkit-text-stroke: calc(var(--u) * .0042) #000; paint-order: stroke fill; text-shadow: 0 calc(var(--u) * .006) 0 #000, 0 0 12px rgba(0, 0, 0, .7);
+/* Damage in big battle numbers (Cinzel Black: medieval, still easy to read): they pop, then rise and fade. */
+.float { position: absolute; z-index: 6; left: 50%; top: 55%; transform: translate(-50%, 0); font: 900 calc(var(--u) * .07)/1 "Cinzel", Georgia, serif; color: #fff;
+  -webkit-text-stroke: calc(var(--u) * .0048) #000; paint-order: stroke fill; text-shadow: 0 calc(var(--u) * .006) 0 #000, 0 0 12px rgba(0, 0, 0, .7);
   pointer-events: none; white-space: nowrap; animation: hitpop 1.35s ease-out forwards; }
-.float.crit { color: #ffd34d; font-size: calc(var(--u) * .088); animation-name: critpop; }
+.float.crit { color: #ffd34d; font-size: calc(var(--u) * .095); animation-name: critpop; }
 .float.heal { color: #86f59a; }
-.float.miss { color: #d0d0d0; font-size: calc(var(--u) * .036); }
+.float.miss { color: #d0d0d0; font-size: calc(var(--u) * .04); }
 .float.abs { color: #a9c8ff; font-size: calc(var(--u) * .04); }
 .float.st { top: 50%; font: 700 calc(var(--u) * .024)/1 var(--display); letter-spacing: .06em; -webkit-text-stroke: 0; color: #ffb3ba; text-shadow: 0 1px 0 #000, 0 0 4px #000, 0 0 2px #000; animation-name: rise; }
 .float.st.good { color: #eaeaea; }
@@ -177,7 +187,7 @@ body.in-battle { overflow: hidden; }
 .log li.ko { color: var(--red); font-weight: 600; }
 .log li.sys { color: #8a8a8a; font-style: italic; }
 .banner { position: absolute; inset: 0; z-index: 7; display: grid; place-items: center; pointer-events: none; }
-.banner b { font: 400 clamp(44px, 9vw, 130px)/1 "Bungee", var(--display); color: #fff; -webkit-text-stroke: 3px #000; paint-order: stroke fill; text-shadow: 0 6px 0 #000, 0 0 40px rgba(0, 0, 0, .8); animation: banner .9s ease-out both; }
+.banner b { font: 900 clamp(48px, 10vw, 140px)/1 "Cinzel", Georgia, serif; letter-spacing: .04em; color: #fff; -webkit-text-stroke: 3px #000; paint-order: stroke fill; text-shadow: 0 6px 0 #000, 0 0 40px rgba(0, 0, 0, .8); animation: banner .9s ease-out both; }
 .banner.lose b { color: var(--red); }
 @keyframes banner { 0% { opacity: 0; transform: scale(2); } 40% { opacity: 1; transform: scale(.95); } 60% { transform: scale(1.03); } 100% { opacity: 1; transform: scale(1); } }
 
@@ -185,13 +195,13 @@ body.in-battle { overflow: hidden; }
 .hud { display: grid; grid-template-columns: minmax(190px, min(300px, 19vw)) minmax(0, 1fr) minmax(190px, min(300px, 19vw)); gap: 16px; background: #050505; border-top: 1px solid var(--line-2); padding: 10px 16px 12px; }
 @media (max-width: 900px) { .hud { grid-template-columns: 1fr 1fr; } .hud .mid { grid-column: 1 / -1; order: 3; } }
 .side { display: grid; gap: 6px; align-content: start; }
-.plate { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px; align-items: center; padding: 3px 4px; border: 0; background: none; text-align: left; color: inherit; font: inherit; text-transform: none; letter-spacing: 0; cursor: default; position: relative; }
+.plate { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 8px; align-items: center; padding: 3px 4px; border: 0; background: none; text-align: left; color: inherit; font: inherit; text-transform: none; letter-spacing: 0; cursor: default; position: relative; }
 .side.a .plate { cursor: pointer; }
-.side.b .plate { grid-template-columns: minmax(0, 1fr) 44px; text-align: right; }
+.side.b .plate { grid-template-columns: minmax(0, 1fr) 48px; text-align: right; }
 .side.b .plate .pt { order: 2; }
-.plate .pt { width: 44px; height: 44px; border: 2px solid #3a3a3a; background: #000; overflow: hidden; }
+.plate .pt { width: 48px; height: 48px; border: 2px solid #3a3a3a; background: #000; overflow: hidden; }
 .plate .pt canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
-.plate .nm { font: 600 12.5px var(--display); letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.plate .nm { font: 600 13px var(--display); letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .plate .nm small { font: 10px var(--mono); color: var(--muted); letter-spacing: 0; margin: 0 4px; text-transform: none; }
 .plate.turn .pt { border-color: #fff; }
 .side.b .plate.turn .pt { border-color: var(--red); }
@@ -201,15 +211,22 @@ body.in-battle { overflow: hidden; }
 .plate.down { opacity: .35; }
 .plate.can { cursor: pointer; background: rgba(227, 23, 43, .14); }
 .plate.can.ally { background: rgba(255, 255, 255, .1); }
-.bar { position: relative; height: 8px; background: #1a1a1a; margin-top: 3px; }
+.bx { display: grid; grid-template-columns: minmax(0, 1fr) 58px; gap: 7px; align-items: center; margin-top: 3px; }
+.side.b .bx { grid-template-columns: 58px minmax(0, 1fr); }
+.side.b .bx .v { order: -1; text-align: left; }
+.bx .v { font: 700 12px/1 var(--mono); text-align: right; color: #e6e6e6; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bx.mp .v { font-size: 11px; font-weight: 600; color: #9fc0e8; }
+.bx.ap .v { font-size: 12.5px; color: #ffd76a; }
+.bar { position: relative; height: 12px; background: #1c1c1c; box-shadow: inset 0 0 0 1px #2c2c2c; }
 .bar i { position: absolute; inset: 0 auto 0 0; transition: width .25s; background: #e8e8e8; }
 .side.b .bar.hp i { background: var(--red); }
 .bar u { position: absolute; inset: 0 auto 0 0; background: rgba(255, 255, 255, .35); transition: width .25s; }
-.bar.mp { height: 4px; margin-top: 2px; }
-.bar.mp i { background: #6f8db0; }
-.bar.ap { height: 4px; margin-top: 2px; }
-.bar.ap i { background: #b9995a; }
+.bar.mp, .bar.ap { height: 7px; }
+.bar.mp i { background: #7aa3d4; }
+.bar.ap i { background: #e0b04f; box-shadow: 0 0 6px rgba(224, 176, 79, .6); }
 .side.b .bar i, .side.b .bar u { inset: 0 0 0 auto; }
+.apchip { font: 600 11px var(--mono); letter-spacing: .04em; color: #e8c475; border: 1px solid #6b5520; background: #161005; padding: 2px 8px; }
+.apchip b { font-size: 15px; color: #ffd76a; }
 .plate .tags { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 3px; }
 .side.b .plate .tags { justify-content: flex-end; }
 .plate .tags span { font: 600 8.5px var(--mono); padding: 0 3px; border: 1px solid #333; color: #ccc; }
@@ -249,6 +266,7 @@ body.in-battle { overflow: hidden; }
 .tile .mp { position: absolute; right: 2px; bottom: 1px; font: 600 9px var(--mono); color: #8fb0d6; }
 .tile .cd { position: absolute; inset: 0; display: grid; place-items: center; font: 700 18px var(--mono); color: #fff; background: rgba(0, 0, 0, .55); }
 .tile .tag { position: absolute; left: 2px; top: 1px; font: 600 8px var(--mono); color: #777; }
+.tile .apx { position: absolute; left: 2px; bottom: 1px; font: 700 10px var(--mono); color: #ffd76a; text-shadow: 0 0 2px #000, 0 0 2px #000; }
 .tile.trait .tag { color: #c9a64a; }
 .tile.pet .tag { color: #ffd34d; }
 
@@ -279,7 +297,7 @@ footer p { margin: 0; }
         <div class="eyebrow">Practice arena · version 0.5 · you against the AI</div>
         <h1>Arena</h1>
       </div>
-      <div class="row"><a class="btn" href="../legion-viewer/?squad=1">Edit squad</a><button type="button" class="primary fight" id="btn-fight" disabled>Fight ▸</button></div>
+      <div class="row"><span class="seg" id="caps" role="group" aria-label="Level cap"><span>Level cap</span></span><button type="button" class="primary fight" id="btn-fight" disabled>Fight ▸</button></div>
     </div>
     <p class="status" id="status">Reading the squad…</p>
     <div class="scenes" id="scenes" aria-label="Scene of the arena"></div>
@@ -331,6 +349,6 @@ footer p { margin: 0; }
     <p>Skills from the patch notes up to 2.8.2 and, where they leave a gap, the game client's own texts; icons and scenes from the game. Traits from the class pages, pet bonuses from the game's list. Stats, accuracy, Speed and starting Initiative: Hubert's Dynamic Stat Calculator. Each battle has a seed: the same seed and the same moves give the same battle.</p>
   </footer>
 </main>
-<script type="module" src="app.js?v=9"></script>
+<script type="module" src="app.js?v=10"></script>
 </body>
 </html>

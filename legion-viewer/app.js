@@ -6,7 +6,7 @@ import {
 import { createAnimatedHeroCard } from 'https://esm.sh/@defikingdoms/game-sdk@0.1.0/renderer?deps=ethers@5.8.0';
 import { traitScore, heroScore, heroMult, heroScoreX, clearHeroScores } from '../assets/heroscore.js?v=1';
 import { getWallet, onWalletChange, mountWallet, sameAddr, shortAddr, saveLegion, readLegion, ago } from '../assets/session.js?v=1';
-import { decorate, mountSquad } from './squad-ui.js?v=3';
+import { decorate, mountSquad, pickPreset } from './squad-ui.js?v=4';
 import { heroLook, onArmoryChange, heroKey, wearerOf } from '../assets/armory.js?v=1';
 import { hookCardIcons } from '../assets/equip-ui.js?v=1';
 
@@ -77,13 +77,11 @@ const yesNo = (yes, no) => (v) => (v === 'yes' ? yes : no);
 /* ================= HEROES ================= */
 const HERO_TABS = [
   { id: 'basics', label: 'Basics', groups: [
-    range('hsx', 'Heroscore X', heroScoreX, { hint: "Hubert's Heroscore × (1 + trait counter), Gen 0 ×3" }),
-    range('hs', 'Heroscore', heroScore),
+    range('level', 'Level', (h) => h.level, { slider: [1, 20], hint: 'Drag the ends; 20+ means no upper limit. The Arena caps are 10, 12, 15, 20.' }),
     geneSet('class', 'Class', sg('class'), (r) => className(HERO_CLASSES[r]) || `#${r}`, { tag: (r) => TIER_TAG[tierOf(r)] }),
     geneSet('subClass', 'Subclass', sg('subClass'), (r) => className(HERO_CLASSES[r]) || `#${r}`, { tag: (r) => TIER_TAG[tierOf(r)] }),
     set('tier', 'Class tier', (h) => [getClassTier(h.statGenes.raw.class.d)], cap, { order: ['basic', 'advanced', 'elite', 'exalted'] }),
     set('rarity', 'Rarity', (h) => [h.rarity], cap, { order: RARITY, swatch: (r) => `var(--r-${r})` }),
-    range('level', 'Level', (h) => h.level),
     range('generation', 'Generation', (h) => h.generation),
     range('summons', 'Summons left', (h) => h.summonsRemaining, { hint: '11 means unlimited' }),
     set('realm', 'Origin realm', (h) => [h.originRealm], (r) => REALMS[r] || r, { order: Object.keys(REALMS), hint: 'From the ID: no prefix Serendale 1.0, 1… Crystalvale, 2… Serendale 2.0' }),
@@ -91,6 +89,8 @@ const HERO_TABS = [
     geneSet('gender', 'Gender', vg('gender'), (r) => ({ 1: 'Male', 3: 'Female' })[r] || `#${r}`),
     geneSet('element', 'Element', sg('element'), (r) => cap(ELEMENTS[r]) || `#${r}`),
     geneSet('background', 'Background', vg('background'), (r) => cap(BACKGROUNDS[r]) || `#${r}`),
+    range('hsx', 'Heroscore X', heroScoreX, { hint: "Hubert's Heroscore × (1 + trait counter), Gen 0 ×3" }),
+    range('hs', 'Heroscore', heroScore),
   ] },
   { id: 'traits', label: 'Traits', groups: [
     geneSet('active1', 'Active 1', sg('active1'), skillName(ACTIVE_SKILLS), { wide: true, tag: (r) => TIER_TAG[tierOf(r)] }),
@@ -663,6 +663,8 @@ function buildGroup(sec, g, counts) {
       box.append(l);
     }
     det.append(box);
+  } else if (g.slider) {
+    det.append(levelSlider(sec, g));
   } else {
     let lo = Infinity, hi = -Infinity;
     for (const row of sec.cache.values()) { const v = row[g.id]; if (v == null) continue; if (v < lo) lo = v; if (v > hi) hi = v; }
@@ -683,6 +685,43 @@ function buildGroup(sec, g, counts) {
     det.append(box);
   }
   return det;
+}
+
+/* One bar with two ends, LO to HI; the top end at HI means "and above". */
+function levelSlider(sec, g) {
+  const [LO, HI] = g.slider;
+  const cur = sec.rng[g.id] || {};
+  const box = el('div', 'lvl');
+  const out = el('div', 'lvl-out');
+  const track = el('div', 'lvl-track');
+  const fill = el('i');
+  const mk = (v, which) => {
+    const i = document.createElement('input'); i.type = 'range'; i.min = LO; i.max = HI; i.step = 1;
+    i.value = String(Math.max(LO, Math.min(HI, v))); i.setAttribute('aria-label', `${g.label} ${which}`);
+    return i;
+  };
+  const a = mk(cur.min != null ? cur.min : LO, 'from'), b = mk(cur.max != null ? cur.max : HI, 'to');
+  const paint = () => {
+    const lo = +a.value, hi = +b.value;
+    out.replaceChildren('Level ', el('b', null, String(lo)), ' – ', el('b', null, hi === HI ? `${HI}+` : String(hi)));
+    const p1 = (lo - LO) / (HI - LO), p2 = (hi - LO) / (HI - LO);
+    fill.style.left = `calc(9px + (100% - 18px) * ${p1})`;
+    fill.style.width = `calc((100% - 18px) * ${p2 - p1})`;
+  };
+  const sync = (moved) => {
+    if (+a.value > +b.value) { if (moved === a) b.value = a.value; else a.value = b.value; }
+    const lo = +a.value, hi = +b.value;
+    sec.rng[g.id] = { min: lo > LO ? lo : null, max: hi < HI ? hi : null };
+    paint(); schedule();
+  };
+  a.addEventListener('input', () => sync(a));
+  b.addEventListener('input', () => sync(b));
+  track.append(fill, a, b);
+  const ticks = el('div', 'lvl-ticks');
+  for (const t of [1, 5, 10, 12, 15, 20]) ticks.append(el('span', null, t === HI ? `${t}+` : String(t)));
+  box.append(out, track, ticks);
+  paint();
+  return box;
 }
 
 function syncTabs() {
@@ -844,6 +883,7 @@ function resetSection(sec) {
 function finish(sec, data, my) {
   if (my !== run) return;
   sec.data = data; buildCache(sec); sec.state = 'ready';
+  pickPreset(sec);
   renderSecTabs();
   if (current === sec.key) { renderHeadline(); buildSidebar(); renderGrid(); updateFacets(); }
 }
@@ -1045,6 +1085,7 @@ function restoreView(addr, chainId) {
     sec.query = st.query || '';
     Object.assign(sec.rng, st.rng || {});
     for (const [g, list] of Object.entries(st.sel || {})) sec.sel[g] = new Set(list);
+    pickPreset(sec);
   }
   show(SECTIONS[v.current] ? v.current : current);
   if (v.scrollY) requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, v.scrollY)));
