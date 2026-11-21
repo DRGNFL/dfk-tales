@@ -864,69 +864,129 @@ function applyLegion(data, my) {
   finish(SECTIONS.items, data.items, my);
 }
 
+/* The legion updates by itself: when the copy kept in this browser is older than STALE, it is read again
+   from the chain in the background and swapped in only if something changed, keeping filters and scroll. */
+const STALE = 15 * 60 * 1000;
+let shownData = null, shownAt = 0, refreshing = false, retryAt = 0;
+const digest = (d) => JSON.stringify(d, (k, v) => (typeof v === 'bigint' ? v.toString() : v));
+const keptLine = () => `Read from the chain ${ago(shownAt)}, kept in this browser. It updates by itself every 15 minutes; Load legion reads it now.`;
+
 async function openLegion(addr, chainId, { fresh = false } = {}) {
   addr = addr.trim();
   if (!isAddr(addr)) { setStatus('That is not a wallet address: 0x followed by 40 characters.', true); return; }
   chainId = CHAIN_IDS.includes(String(chainId)) ? Number(chainId) : 43114;
   const my = begin(addr, chainId);
+  shownData = null; shownAt = 0;
   if (!fresh) {
     const saved = await readLegion(chainId, addr);
     if (my !== run) return;
     if (saved && saved.heroes && saved.pets && saved.gear && saved.items) {
-      applyLegion(saved, my);
+      const { savedAt, ...data } = saved;
+      shownData = data; shownAt = savedAt;
+      applyLegion(data, my);
       restoreView(addr, chainId);
-      setStatus(`Kept in this browser, read from the chain ${ago(saved.savedAt)}. Load legion reads it again.`);
+      setStatus(keptLine());
+      if (Date.now() - savedAt > STALE) refreshInBackground();
       return;
     }
   }
   await readChain(addr, chainId, my);
 }
 
-async function readChain(addr, chainId, my) {
-  $('#btn-load').disabled = true;
-  setStatus('Reading the legion from the chain…');
-  const got = {};
-
-  const pGear = retry(() => client.equipment.byOwner(addr, { includeListed: true })).then((list) => {
-    if (my !== run) return list;
-    for (const e of list) gearByKey.set(`${e.kind === 'offhand' ? 'accessory' : e.kind}:${e.id}`, e);
-    return (got.gear = list);
-  });
+/* The five reads of a legion. Heroes come in batches of 60 and report their progress. */
+function readParts(addr, my, onHeroes) {
+  const pGear = retry(() => client.equipment.byOwner(addr, { includeListed: true }));
   const pHeroes = (async () => {
     const ids = await retry(() => client.heroes.idsByOwner(addr, { includeListed: true }));
     const out = [];
+    onHeroes(0, ids.length);
     for (let i = 0; i < ids.length; i += 60) {
       if (my !== run) return out;
-      if (current === 'heroes') $('#count').textContent = `Reading heroes ${Math.min(i + 60, ids.length)} / ${ids.length}`;
       out.push(...(await retry(() => client.heroes.getMany(ids.slice(i, i + 60)))));
+      onHeroes(out.length, ids.length);
     }
-    return (got.heroes = out);
+    return out;
   })();
-  const pPets = retry(() => client.pets.byOwner(addr, { includeListed: true })).then((l) => (got.pets = l));
-  const pItems = retry(() => client.items.balances(addr)).then((l) => (got.items = l.filter((b) => num(b.formatted) > 0)));
-  const pTokens = retry(() => client.tokens.balances(addr)).then((l) => (got.tokens = l)).catch(() => (got.tokens = []));
+  const pPets = retry(() => client.pets.byOwner(addr, { includeListed: true }));
+  const pItems = retry(() => client.items.balances(addr)).then((l) => l.filter((b) => num(b.formatted) > 0));
+  const pTokens = retry(() => client.tokens.balances(addr)).catch(() => []);
+  return { pGear, pHeroes, pPets, pItems, pTokens };
+}
 
-  pHeroes.then((list) => { list.forEach((h) => heroById.set(String(h.id), h)); });
-  pGear.then((list) => finish(SECTIONS.gear, list, my), (e) => fail(SECTIONS.gear, e, my));
+async function readChain(addr, chainId, my) {
+  $('#btn-load').disabled = true;
+  setStatus('Reading the legion from the chain…');
+  const { pGear, pHeroes, pPets, pItems, pTokens } = readParts(addr, my, (n, total) => {
+    if (my !== run) return;
+    setStatus(`Reading the legion from the chain: heroes ${n} / ${total}`);
+    if (current === 'heroes' && SECTIONS.heroes.state === 'loading') $('#count').textContent = `Reading heroes ${n} / ${total}`;
+  });
+  const got = {};
+  pGear.then((list) => {
+    got.gear = list;
+    if (my !== run) return;
+    for (const e of list) gearByKey.set(`${e.kind === 'offhand' ? 'accessory' : e.kind}:${e.id}`, e);
+    finish(SECTIONS.gear, list, my);
+  }, (e) => fail(SECTIONS.gear, e, my));
+  pHeroes.then((list) => { got.heroes = list; list.forEach((h) => heroById.set(String(h.id), h)); });
   Promise.allSettled([pHeroes, pGear]).then(([h]) => {
     if (h.status === 'fulfilled') finish(SECTIONS.heroes, h.value, my); else fail(SECTIONS.heroes, h.reason, my);
     const g = SECTIONS.gear;
     if (my === run && g.state === 'ready') { g.cards.clear(); if (current === 'gear') renderGrid(); }
   });
-  Promise.allSettled([pPets, pHeroes]).then(([p]) => { if (p.status === 'fulfilled') finish(SECTIONS.pets, p.value, my); else fail(SECTIONS.pets, p.reason, my); });
+  Promise.allSettled([pPets, pHeroes]).then(([p]) => { if (p.status === 'fulfilled') { got.pets = p.value; finish(SECTIONS.pets, p.value, my); } else fail(SECTIONS.pets, p.reason, my); });
   Promise.allSettled([pItems, pTokens]).then(([i, t]) => {
-    if (t.status === 'fulfilled') tokens = t.value;
-    if (i.status === 'fulfilled') finish(SECTIONS.items, i.value, my); else fail(SECTIONS.items, i.reason, my);
+    if (t.status === 'fulfilled') got.tokens = tokens = t.value;
+    if (i.status === 'fulfilled') { got.items = i.value; finish(SECTIONS.items, i.value, my); } else fail(SECTIONS.items, i.reason, my);
   });
   await Promise.allSettled([pHeroes, pGear, pPets, pItems, pTokens]);
   if (my !== run) return;
   $('#btn-load').disabled = false;
   const failed = Object.values(SECTIONS).filter((s) => s.state === 'error').map((s) => s.label.toLowerCase());
   if (failed.length) { setStatus(`Could not read ${failed.join(', ')}. Load again in a moment.`, true); return; }
+  shownData = got; shownAt = Date.now();
   setStatus('');
   // Keep it in this browser: coming back to this legion will not read the chain again.
-  saveLegion(chainId, addr, got).catch((e) => console.warn('legion not kept in this browser', e));
+  saveLegion(chainId, addr, got).then((t) => { shownAt = t; }, (e) => console.warn('legion not kept in this browser', e));
 }
+
+async function refreshInBackground() {
+  if (refreshing || !shown || !shownData) return;
+  const { addr, chainId } = shown;
+  const my = run;
+  refreshing = true;
+  const base = keptLine().split('. It updates')[0];
+  try {
+    const p = readParts(addr, my, (n, total) => { if (my === run) setStatus(`${base}. Updating from the chain: heroes ${n} / ${total}`); });
+    const [gear, heroes, pets, items, tokens] = await Promise.all([p.pGear, p.pHeroes, p.pPets, p.pItems, p.pTokens]);
+    if (my !== run) return;
+    const got = { gear, heroes, pets, items, tokens };
+    const changed = digest(got) !== digest(shownData);
+    shownAt = await saveLegion(chainId, addr, got).catch(() => Date.now());
+    if (changed) {
+      saveView();
+      const my2 = begin(addr, chainId);
+      applyLegion(got, my2);
+      restoreView(addr, chainId);
+    }
+    shownData = got;
+    setStatus(changed ? 'Updated from the chain just now: the legion changed since the last read.' : keptLine());
+  } catch (e) {
+    console.warn('background update', e);
+    if (my === run) setStatus(`${base}. The chain did not answer the update: it tries again in a few minutes.`, true);
+    retryAt = Date.now() + 5 * 60 * 1000; // try again in 5 minutes
+  } finally {
+    refreshing = false;
+  }
+}
+const maybeRefresh = () => {
+  if (document.hidden || !shownAt || refreshing || Date.now() < retryAt) return;
+  if (SECTIONS.heroes.state !== 'ready') return;
+  if (Date.now() - shownAt > STALE) refreshInBackground();
+  else if (shownData && !$('#status').classList.contains('err') && /^Read from the chain/.test($('#status').textContent)) setStatus(keptLine());
+};
+setInterval(maybeRefresh, 60 * 1000);
+document.addEventListener('visibilitychange', maybeRefresh);
 
 /* Where you were in the legion (section, filters, search, sort, scroll), for when you come back to it. */
 const viewKey = (addr, chainId) => `dfk-tales:view:${chainId}:${addr.toLowerCase()}`;

@@ -17,6 +17,11 @@
 .hv { max-width: 1180px; margin: 0 auto; padding: 24px clamp(16px, 2.5vw, 32px) 56px; display: grid; gap: 22px; }
 .head { display: grid; gap: 8px; }
 .head h1 { font: 700 clamp(32px, 5vw, 56px)/0.95 var(--display); text-transform: uppercase; letter-spacing: .02em; margin: 2px 0 4px; text-wrap: balance; }
+.hsx { display: flex; align-items: baseline; gap: 12px; margin: 0 0 10px; }
+.hsx[hidden] { display: none; }
+.hsx em { font: 600 13px var(--display); font-style: normal; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.hsx b { font: 600 clamp(24px, 3.2vw, 32px)/1 var(--mono); color: var(--text); }
+.hsx small { font: italic 400 12px var(--body); color: var(--muted); }
 .tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .tag { font: 600 11px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; padding: 6px 9px; border: 1px solid var(--line-2); background: var(--panel); white-space: nowrap; }
 .tag.mono { font: 12px/1 var(--mono); letter-spacing: 0; text-transform: none; }
@@ -137,6 +142,7 @@ footer p { margin: 0; }
   <section class="head" aria-live="polite">
     <div class="eyebrow" id="eyebrow">Hero Viewer</div>
     <h1 id="name">Loading…</h1>
+    <div class="hsx" id="hsx" hidden></div>
     <div class="tags" id="tags"></div>
     <div class="status" id="status"></div>
   </section>
@@ -217,6 +223,6 @@ footer p { margin: 0; }
     <p>No flying arrows, spell effects or sounds: the SDK only carries the hero. Read-only: nothing here asks for a signature, a transaction or an approval.</p>
   </footer>
 </main>
-<script type="module" src="app.js?v=2"></script>
+<script type="module" src="app.js?v=3"></script>
 </body>
 </html>

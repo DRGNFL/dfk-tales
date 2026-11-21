@@ -119,6 +119,10 @@ function render({ hero, chainId, gear, parents }) {
   document.title = `${hero.name} · Hero Viewer · DFK Tales`;
   $('#eyebrow').textContent = `Hero #${hero.displayId} · ${chainName} · born in ${REALMS[hero.originRealm] || cap(hero.originRealm)}`;
   $('#name').textContent = hero.name;
+  const hsx = $('#hsx');
+  hsx.replaceChildren(el('em', null, 'Heroscore X'), el('b', null, fmtInt(heroScoreX(hero))),
+    el('small', null, `Heroscore ${fmtInt(heroScore(hero))} × ${heroMult(hero)}${hero.generation === 0 ? ' (Gen 0)' : ''}`));
+  hsx.hidden = false;
 
   const tags = $('#tags');
   const tag = (text, cls) => tags.append(el('span', `tag${cls ? ` ${cls}` : ''}`, text));
