@@ -5,6 +5,9 @@ import {
   HeroRenderer, createAnimatedHeroCard, HERO_ANIMATIONS, getHeroWeaponAnimationSet, professionAnimation, weaponAnimation,
 } from 'https://esm.sh/@defikingdoms/game-sdk@0.1.0/renderer?deps=ethers@5.8.0';
 import { heroScore, heroMult, heroScoreX, tierOf } from '../assets/heroscore.js?v=1';
+import { mountWallet, onWalletChange, getWallet, sameAddr, shortAddr, legionUrl } from '../assets/session.js?v=1';
+
+mountWallet(document.querySelector('#wallet'));
 
 /* ================= vocab ================= */
 const DEFAULT_ID = '1000000523445'; // Hotoyor Longfollower
@@ -128,6 +131,17 @@ function render({ hero, chainId, gear, parents }) {
   tag(cap(hero.gender));
   if (hero.shiny) tag('Shiny', 'r-legendary');
   if (dark) tag('Dark summon', 'dark');
+  // The owner's legion, one click away; yours if this wallet is connected.
+  const own = el('a', 'tag');
+  own.href = legionUrl(hero.owner, chainId);
+  const paintOwner = () => {
+    const mine = sameAddr(getWallet(), hero.owner);
+    own.classList.toggle('mine', mine);
+    own.textContent = mine ? 'Your hero' : `Owner ${shortAddr(hero.owner)}`;
+    own.title = mine ? 'Open your legion' : `Open the legion of ${hero.owner}`;
+  };
+  paintOwner(); onWalletChange(paintOwner);
+  tags.append(own);
 
   renderFacts(hero, gear);
   renderLineage(hero, parents || [], dark);

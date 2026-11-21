@@ -5,6 +5,7 @@ import {
 } from 'https://esm.sh/@defikingdoms/game-sdk@0.1.0?deps=ethers@5.8.0';
 import { createAnimatedHeroCard } from 'https://esm.sh/@defikingdoms/game-sdk@0.1.0/renderer?deps=ethers@5.8.0';
 import { traitScore, heroScore, heroMult, heroScoreX, clearHeroScores } from '../assets/heroscore.js?v=1';
+import { getWallet, onWalletChange, mountWallet, sameAddr, shortAddr, saveLegion, readLegion, ago } from '../assets/session.js?v=1';
 
 /* ================= vocab ================= */
 const RARITY = ['common', 'uncommon', 'rare', 'legendary', 'mythic'];
@@ -148,6 +149,16 @@ function heroGear(h) {
   return { gear, missing };
 }
 
+const HERO_VIEWER = new URL('../hero-viewer/', location.href).href;
+function heroViewerLink(h) {
+  const a = el('a', 'hv-link');
+  a.href = `${HERO_VIEWER}?id=${h.id}`;
+  a.title = `Open ${h.name} in the Hero Viewer`;
+  a.setAttribute('aria-label', `Open ${h.name} in the Hero Viewer`);
+  a.innerHTML = '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M1 8s2.6-4.5 7-4.5S15 8 15 8s-2.6 4.5-7 4.5S1 8 1 8z" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="8" r="2.2" fill="currentColor"/></svg>';
+  return a;
+}
+
 const HEROES = {
   key: 'heroes', label: 'Heroes', tabs: HERO_TABS, sorts: HERO_SORTS, gene: true, lazy: true,
   search: (h) => `${h.name} ${h.id} ${h.displayId}`,
@@ -159,7 +170,7 @@ const HEROES = {
       const strip = el('div', 'hs');
       const a = el('span'); a.append('HEROSCORE ', el('b', null, fmtInt(heroScore(h))));
       const b = el('span', 'x'); b.append(`×${heroMult(h)} · HSX `, el('b', null, fmtInt(heroScoreX(h))));
-      strip.append(a, b);
+      strip.append(a, heroViewerLink(h), b);
       entry.slot.replaceChildren(entry.handle.element, strip);
       entry.slot.classList.add('live');
       entry.handle.renderer.then((r) => { entry.renderer = r; if (!entry.visible) r.pause(); });
@@ -813,25 +824,73 @@ function fail(sec, e, my) {
   if (current === sec.key) { renderHeadline(); buildSidebar(); $('#count').textContent = `Could not read ${sec.label.toLowerCase()}. Load again in a moment.`; }
 }
 
-async function load() {
-  const addr = $('#addr').value.trim();
-  if (!isAddr(addr)) { setStatus('That is not a wallet address: 0x followed by 40 characters.', true); return; }
-  const chainId = Number($('#chain').value);
+/* A legion is opened from what this browser kept, when it has it, or read from the chain.
+   "Load legion" always reads the chain again. */
+const CHAIN_IDS = ['43114', '8217'];
+let shown = null; // { addr, chainId } of the legion on screen
+
+function begin(addr, chainId) {
   const my = ++run;
+  $('#addr').value = addr; $('#chain').value = String(chainId);
   owner = addr; chainName = $('#chain').selectedOptions[0].textContent;
+  shown = { addr, chainId };
   client = createDFKClient({ chainId });
   heroById.clear(); gearByKey.clear(); clearHeroScores(); tokens = [];
   for (const sec of Object.values(SECTIONS)) { resetSection(sec); sec.state = 'loading'; }
   $('#void').hidden = true; $('#headline').hidden = false;
+  renderWhose();
   renderSecTabs(); renderHeadline(); buildSidebar(); renderGrid();
+  store.set('dfk-tales:addr', addr); store.set('dfk-tales:chain', String(chainId));
+  const q = new URLSearchParams(); q.set('legion', addr); if (chainId !== 43114) q.set('chain', String(chainId));
+  history.replaceState(null, '', `${location.pathname}?${q}${location.hash}`);
+  return my;
+}
+
+function renderWhose() {
+  const w = getWallet();
+  const box = $('#whose');
+  if (!shown) { box.textContent = ''; return; }
+  box.replaceChildren(sameAddr(w, shown.addr) ? 'Your legion · ' : 'Legion of ', el('span', 'addr', shortAddr(shown.addr)), ` · ${chainName}`);
+  box.title = shown.addr;
+}
+
+function applyLegion(data, my) {
+  for (const e of data.gear) gearByKey.set(`${e.kind === 'offhand' ? 'accessory' : e.kind}:${e.id}`, e);
+  data.heroes.forEach((h) => heroById.set(String(h.id), h));
+  tokens = data.tokens || [];
+  finish(SECTIONS.gear, data.gear, my);
+  finish(SECTIONS.heroes, data.heroes, my);
+  finish(SECTIONS.pets, data.pets, my);
+  finish(SECTIONS.items, data.items, my);
+}
+
+async function openLegion(addr, chainId, { fresh = false } = {}) {
+  addr = addr.trim();
+  if (!isAddr(addr)) { setStatus('That is not a wallet address: 0x followed by 40 characters.', true); return; }
+  chainId = CHAIN_IDS.includes(String(chainId)) ? Number(chainId) : 43114;
+  const my = begin(addr, chainId);
+  if (!fresh) {
+    const saved = await readLegion(chainId, addr);
+    if (my !== run) return;
+    if (saved && saved.heroes && saved.pets && saved.gear && saved.items) {
+      applyLegion(saved, my);
+      restoreView(addr, chainId);
+      setStatus(`Kept in this browser, read from the chain ${ago(saved.savedAt)}. Load legion reads it again.`);
+      return;
+    }
+  }
+  await readChain(addr, chainId, my);
+}
+
+async function readChain(addr, chainId, my) {
   $('#btn-load').disabled = true;
   setStatus('Reading the legion from the chain…');
-  store.set('dfk-tales:addr', addr); store.set('dfk-tales:chain', String(chainId));
+  const got = {};
 
   const pGear = retry(() => client.equipment.byOwner(addr, { includeListed: true })).then((list) => {
     if (my !== run) return list;
     for (const e of list) gearByKey.set(`${e.kind === 'offhand' ? 'accessory' : e.kind}:${e.id}`, e);
-    return list;
+    return (got.gear = list);
   });
   const pHeroes = (async () => {
     const ids = await retry(() => client.heroes.idsByOwner(addr, { includeListed: true }));
@@ -841,11 +900,11 @@ async function load() {
       if (current === 'heroes') $('#count').textContent = `Reading heroes ${Math.min(i + 60, ids.length)} / ${ids.length}`;
       out.push(...(await retry(() => client.heroes.getMany(ids.slice(i, i + 60)))));
     }
-    return out;
+    return (got.heroes = out);
   })();
-  const pPets = retry(() => client.pets.byOwner(addr, { includeListed: true }));
-  const pItems = retry(() => client.items.balances(addr));
-  const pTokens = retry(() => client.tokens.balances(addr)).catch(() => []);
+  const pPets = retry(() => client.pets.byOwner(addr, { includeListed: true })).then((l) => (got.pets = l));
+  const pItems = retry(() => client.items.balances(addr)).then((l) => (got.items = l.filter((b) => num(b.formatted) > 0)));
+  const pTokens = retry(() => client.tokens.balances(addr)).then((l) => (got.tokens = l)).catch(() => (got.tokens = []));
 
   pHeroes.then((list) => { list.forEach((h) => heroById.set(String(h.id), h)); });
   pGear.then((list) => finish(SECTIONS.gear, list, my), (e) => fail(SECTIONS.gear, e, my));
@@ -857,17 +916,52 @@ async function load() {
   Promise.allSettled([pPets, pHeroes]).then(([p]) => { if (p.status === 'fulfilled') finish(SECTIONS.pets, p.value, my); else fail(SECTIONS.pets, p.reason, my); });
   Promise.allSettled([pItems, pTokens]).then(([i, t]) => {
     if (t.status === 'fulfilled') tokens = t.value;
-    if (i.status === 'fulfilled') finish(SECTIONS.items, i.value.filter((b) => num(b.formatted) > 0), my); else fail(SECTIONS.items, i.reason, my);
+    if (i.status === 'fulfilled') finish(SECTIONS.items, i.value, my); else fail(SECTIONS.items, i.reason, my);
   });
   await Promise.allSettled([pHeroes, pGear, pPets, pItems, pTokens]);
   if (my !== run) return;
   $('#btn-load').disabled = false;
   const failed = Object.values(SECTIONS).filter((s) => s.state === 'error').map((s) => s.label.toLowerCase());
-  setStatus(failed.length ? `Could not read ${failed.join(', ')}. Load again in a moment.` : '', failed.length > 0);
+  if (failed.length) { setStatus(`Could not read ${failed.join(', ')}. Load again in a moment.`, true); return; }
+  setStatus('');
+  // Keep it in this browser: coming back to this legion will not read the chain again.
+  saveLegion(chainId, addr, got).catch((e) => console.warn('legion not kept in this browser', e));
 }
 
+/* Where you were in the legion (section, filters, search, sort, scroll), for when you come back to it. */
+const viewKey = (addr, chainId) => `dfk-tales:view:${chainId}:${addr.toLowerCase()}`;
+function saveView() {
+  if (!shown) return;
+  const secs = {};
+  for (const [k, sec] of Object.entries(SECTIONS)) {
+    secs[k] = { tab: sec.tab, sort: sec.sort, query: sec.query, rng: sec.rng, sel: Object.fromEntries(Object.entries(sec.sel).map(([g, set]) => [g, [...set]])) };
+  }
+  try { sessionStorage.setItem(viewKey(shown.addr, shown.chainId), JSON.stringify({ current, scope, scrollY: window.scrollY, secs })); } catch (e) {}
+}
+function restoreView(addr, chainId) {
+  let v = null;
+  try { v = JSON.parse(sessionStorage.getItem(viewKey(addr, chainId)) || 'null'); } catch (e) {}
+  if (!v) return;
+  if (v.scope && v.scope !== scope) {
+    scope = v.scope;
+    document.querySelectorAll('[data-scope]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.scope === scope)));
+    buildCache(SECTIONS.heroes);
+  }
+  for (const [k, st] of Object.entries(v.secs || {})) {
+    const sec = SECTIONS[k]; if (!sec) continue;
+    if (st.tab && sec.tabs.some((t) => t.id === st.tab)) sec.tab = st.tab;
+    if (st.sort && sec.sorts.some(([id]) => id === st.sort)) sec.sort = st.sort;
+    sec.query = st.query || '';
+    Object.assign(sec.rng, st.rng || {});
+    for (const [g, list] of Object.entries(st.sel || {})) sec.sel[g] = new Set(list);
+  }
+  show(SECTIONS[v.current] ? v.current : current);
+  if (v.scrollY) requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, v.scrollY)));
+}
+window.addEventListener('pagehide', saveView);
+
 /* ---------- wiring ---------- */
-$('#form').addEventListener('submit', (e) => { e.preventDefault(); load(); });
+$('#form').addEventListener('submit', (e) => { e.preventDefault(); openLegion($('#addr').value, $('#chain').value, { fresh: true }); });
 $('#sort').addEventListener('change', () => { S().sort = $('#sort').value; renderGrid(); });
 $('#btn-reset').addEventListener('click', () => {
   const sec = S();
@@ -911,20 +1005,23 @@ function syncPetView() {
   document.querySelectorAll('[data-petview]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.petview === petView)));
   $('#petview-wrap').hidden = current !== 'pets';
 }
-if (window.ethereum) {
-  const b = $('#btn-wallet');
-  b.hidden = false;
-  b.addEventListener('click', async () => {
-    try {
-      const [a] = await window.ethereum.request({ method: 'eth_requestAccounts' });
-      if (a) { $('#addr').value = a; load(); }
-    } catch (e) { setStatus('The wallet did not share an address. You can paste it instead.', true); }
-  });
-}
-const lastAddr = store.get('dfk-tales:addr');
-if (lastAddr) $('#addr').value = lastAddr;
-const lastChain = store.get('dfk-tales:chain');
-if (lastChain && [...$('#chain').options].some((o) => o.value === lastChain)) $('#chain').value = lastChain;
+// Your wallet stays connected on every page. Its chip opens your legion; connecting opens it too.
+const openMine = (w) => {
+  const chainId = Number($('#chain').value) || 43114;
+  if (shown && sameAddr(shown.addr, w) && shown.chainId === chainId && SECTIONS.heroes.state !== 'error') return;
+  openLegion(w, chainId);
+};
+mountWallet($('#wallet'), { onOpen: openMine, onConnect: openMine });
+onWalletChange(renderWhose);
+
+// Which legion to show: the one in the link, else the last one you looked at, else yours.
 const fromHash = location.hash.slice(1);
 show(SECTIONS[fromHash] ? fromHash : 'heroes', { keepHash: true });
-setStatus(lastAddr ? 'Last wallet is filled in. Press Load legion, top right.' : 'Paste a wallet address in the bar at the top to begin.');
+const params = new URLSearchParams(location.search);
+const linked = params.get('legion');
+const lastAddr = store.get('dfk-tales:addr');
+const lastChain = store.get('dfk-tales:chain');
+if (linked && isAddr(linked)) openLegion(linked, params.get('chain') || 43114);
+else if (lastAddr && isAddr(lastAddr)) openLegion(lastAddr, lastChain || 43114);
+else if (getWallet()) openLegion(getWallet(), 43114);
+else setStatus('Connect your wallet, or paste any wallet address in the bar at the top, to begin.');

@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500&family=JetBrains+Mono:wght@400;600&display=swap">
-<link rel="stylesheet" href="../assets/tales.css?v=12">
+<link rel="stylesheet" href="../assets/tales.css?v=13">
 <style>
 /* Filters pinned left, the legion on the right. Black field, one red for state, rarity colors only for rarity. */
 .lv { display: grid; grid-template-columns: 320px minmax(0, 1fr); min-height: calc(100vh - var(--top, 52px)); transition: grid-template-columns .16s ease-out; }
@@ -117,6 +117,10 @@ button.icon { padding: 0; width: 34px; justify-content: center; font: 400 18px/1
 .hs { width: 300px; box-sizing: border-box; display: flex; justify-content: space-between; gap: 8px; font: 11px var(--mono); color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-top: 0; padding: 6px 10px; margin-top: -2px; }
 .hs b { color: var(--text); font-weight: 600; }
 .hs .x b { color: var(--red); }
+.hs .hv-link { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 26px; margin: -6px 0; color: var(--muted); border-left: 1px solid var(--line); border-right: 1px solid var(--line); text-decoration: none; }
+.hs .hv-link:hover { color: #fff; background: var(--red); border-color: var(--red); }
+.whose { margin-bottom: 4px; }
+.whose .addr { font-family: var(--mono); text-transform: none; letter-spacing: 0; color: var(--text); }
 .grid.pet { grid-template-columns: repeat(auto-fill, 220px); gap: 16px; }
 .grid.pet .slot { width: 220px; height: 372px; }
 .is-pet .dfk-heroFrame::before { display: none !important; }
@@ -231,8 +235,8 @@ button.icon { padding: 0; width: 34px; justify-content: center; font: 400 18px/1
       <option value="8217">Kaia</option>
     </select>
     <button type="submit" class="primary" id="btn-load">Load legion</button>
-    <button type="button" id="btn-wallet" title="Asks your wallet for its address only: no signature, no transaction, no approval." hidden>Use my wallet</button>
   </form>
+  <div class="wallet" id="wallet" hidden></div>
 </header>
 
 <div class="lv">
@@ -262,6 +266,7 @@ button.icon { padding: 0; width: 34px; justify-content: center; font: 400 18px/1
     <div class="status" id="status" role="status"></div>
 
     <section class="headline" id="headline" hidden>
+      <div class="eyebrow whose" id="whose"></div>
       <h1><span id="sec-title">Legion</span> <span class="tot" id="total"></span> <span class="score" id="sec-score" hidden></span></h1>
       <div class="sections" id="sections" role="tablist" aria-label="Collection">
         <button type="button" role="tab" id="sec-heroes" data-sec="heroes">Heroes <span class="n"></span></button>
@@ -289,7 +294,7 @@ button.icon { padding: 0; width: 34px; justify-content: center; font: 400 18px/1
     <section class="void" id="void">
       <div class="eyebrow">Legion Viewer</div>
       <h2>Every hero.<br><span>Every gene.</span></h2>
-      <p>Paste a wallet in the bar at the top and load it: heroes, pets, gear and items on the game's cards, with filters for everything. Click a card to flip it.</p>
+      <p>Connect your wallet, or paste any wallet in the bar at the top and load it: heroes, pets, gear and items on the game's cards, with filters for everything. Click a card to flip it.</p>
       <p class="safe">Read-only. "Use my wallet" asks for your address and nothing else: no signature, no transaction, no approval. If a wallet ever asks you to sign here, close it.</p>
     </section>
 
@@ -297,6 +302,6 @@ button.icon { padding: 0; width: 34px; justify-content: center; font: 400 18px/1
   </main>
 </div>
 
-<script type="module" src="app.js?v=14"></script>
+<script type="module" src="app.js?v=15"></script>
 </body>
 </html>

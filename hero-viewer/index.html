@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500&family=JetBrains+Mono:wght@400;600&display=swap">
-<link rel="stylesheet" href="../assets/tales.css?v=12">
+<link rel="stylesheet" href="../assets/tales.css?v=13">
 <style>
 /* One hero, live: the game's rig on the left, the game's card on the right. Black field, one red, rarity colors only for rarity. */
 .topbar .load { margin-left: auto; display: flex; gap: 6px; align-items: center; flex: 0 1 460px; min-width: 0; padding-left: 16px; }
@@ -26,6 +26,9 @@
 .tag.r-legendary { color: var(--r-legendary); border-color: var(--r-legendary); }
 .tag.r-mythic { color: var(--r-mythic); border-color: var(--r-mythic); }
 .tag.dark { color: var(--text); border-color: var(--red); background: var(--red-dim); }
+a.tag { text-decoration: none; font: 12px/1 var(--mono); letter-spacing: 0; text-transform: none; color: var(--muted); }
+a.tag:hover { color: var(--text); border-color: var(--text); }
+a.tag.mine { color: #fff; background: var(--red); border-color: var(--red); font: 600 11px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; }
 .status { font: 12.5px var(--mono); color: var(--muted); }
 .status:empty { display: none; }
 .status.err { color: var(--red); }
@@ -127,6 +130,7 @@ footer p { margin: 0; }
     <input id="hero-id" type="text" inputmode="numeric" placeholder="Hero ID, e.g. 1000000523445" autocomplete="off" spellcheck="false" aria-label="Hero ID">
     <button type="submit" class="primary" id="btn-load">Load hero</button>
   </form>
+  <div class="wallet" id="wallet" hidden></div>
 </header>
 
 <main class="hv">
@@ -213,6 +217,6 @@ footer p { margin: 0; }
     <p>No flying arrows, spell effects or sounds: the SDK only carries the hero. Read-only: nothing here asks for a signature, a transaction or an approval.</p>
   </footer>
 </main>
-<script type="module" src="app.js?v=1"></script>
+<script type="module" src="app.js?v=2"></script>
 </body>
 </html>
