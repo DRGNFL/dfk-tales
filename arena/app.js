@@ -12,7 +12,7 @@ import { CLASS_SKILLS } from './skills.js?v=3';
 import * as AI from './ai.js?v=2';
 import { traitsOf } from './traits.js?v=2';
 import { svg, iconOf, imgOf, classImg, statusImg } from './icons.js?v=2';
-import * as VFX from './vfx.js?v=1';
+import * as VFX from './vfx.js?v=2';
 
 const $ = (s) => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
@@ -39,7 +39,9 @@ let geo = { W: 0, H: 0, u: 0 };
 /* ================= scenes =================
    Every scene of the game's hero cards: 55 x 52 pixel art, most of them animated GIFs, a few with a front layer
    (grass, fog, snow) drawn over the heroes' feet; the light beams and the mist are drawn faint, as on the card
-   (frontOpacity: the card's CSS has 0.1 and 0.2). Our own scenes will go in SCENES with dir, w and h. */
+   (frontOpacity: the card's CSS has 0.1 and 0.2). Our own scenes will go in SCENES with dir, w and h.
+   dim: how much the scene is calmed behind the heroes (darker, less contrast, a little less colour), 0 to 1.
+   Default 1; 0 for the scenes already dark or very light, which Ge found work as they are (22/11). */
 const BG = `${getAssetConfig().assetsBaseUrl}/hero-card/assets/images/hero/backgrounds/`;
 const SCENES = [
   { id: 'colosseum', name: 'Colosseum', base: 'colosseum.gif', group: 'card' },
@@ -47,26 +49,23 @@ const SCENES = [
   { id: 'forest', name: 'Forest', base: 'forest.gif', front: 'forest-front.png', group: 'card' },
   { id: 'desert', name: 'Desert', base: 'desert.gif', front: 'desert-front.png', group: 'card' },
   { id: 'swamp', name: 'Swamp', base: 'swamp.gif', front: 'swamp-front.png', group: 'card' },
-  { id: 'island', name: 'Island', base: 'island.gif', group: 'card' },
+  { id: 'island', name: 'Island', base: 'island.gif', group: 'card', dim: 0 },
   { id: 'mountains', name: 'Mountains', base: 'mountain.gif', group: 'card' },
-  { id: 'arctic', name: 'Arctic', base: 'arctic.gif', group: 'card' },
+  { id: 'arctic', name: 'Arctic', base: 'arctic.gif', group: 'card', dim: 0 },
   { id: 'city', name: 'City', base: 'city.gif', group: 'card' },
   { id: 'fields', name: 'Golden Fields', base: 'plains-back.gif', group: 'back' },
-  { id: 'deepwood', name: 'Deep Forest', base: 'forest-back.gif', front: 'forest-front.gif', group: 'back' },
+  { id: 'deepwood', name: 'Deep Forest', base: 'forest-back.gif', front: 'forest-front.gif', group: 'back', dim: 0 },
   { id: 'dunes', name: 'Desert Night', base: 'desert-back.gif', group: 'back' },
-  { id: 'snowtown', name: 'Snow Town', base: 'city-back.gif', group: 'back' },
-  { id: 'peaks', name: 'Snow Peaks', base: 'arctic-back.gif', front: 'arctic-front.gif', group: 'back' },
-  { id: 'lake', name: 'Lilac Lake', base: 'island-back.gif', group: 'back' },
+  { id: 'snowtown', name: 'Snow Town', base: 'city-back.gif', group: 'back', dim: 0 },
+  { id: 'peaks', name: 'Snow Peaks', base: 'arctic-back.gif', front: 'arctic-front.gif', group: 'back', dim: 0 },
+  { id: 'lake', name: 'Lilac Lake', base: 'island-back.gif', group: 'back', dim: 0 },
   { id: 'cave', name: 'Cave Mouth', base: 'mountains-back.png', front: 'mountains-front.gif', frontOpacity: 0.1, group: 'back' },
-  { id: 'darkwood', name: 'Misty Woods', base: 'swamp-back.gif', front: 'swamp-front.gif', frontOpacity: 0.2, group: 'back' },
-  { id: 'mine', name: 'Mine', base: 'mining.gif', front: 'mining-front-gold.png', group: 'work' },
-  { id: 'farm', name: 'Farm', base: 'gardening.gif', front: 'gardening-front.gif', group: 'work' },
-  { id: 'woods', name: 'Woods', base: 'foraging.png', front: 'foraging-front.gif', group: 'work' },
-  { id: 'dock', name: 'Dock', base: 'fishing.gif', group: 'work' },
+  { id: 'darkwood', name: 'Misty Woods', base: 'swamp-back.gif', front: 'swamp-front.gif', frontOpacity: 0.2, group: 'back', dim: 0 },
 ];
 const SCENE_KEY = 'dfk-tales:arena-scene';
 const sceneChoice = () => store.get(SCENE_KEY) || 'colosseum';
 const sceneUrl = (sc, file) => `${sc.dir || BG}${file}`;
+const sceneFilter = (sc) => { const d = sc.dim == null ? 1 : sc.dim; return d ? `brightness(${(1 - 0.28 * d).toFixed(2)}) contrast(${(1 - 0.18 * d).toFixed(2)}) saturate(${(1 - 0.12 * d).toFixed(2)})` : ''; };
 function pickScene() {
   const c = sceneChoice();
   if (c === 'random') return SCENES[Math.floor(Math.random() * SCENES.length)];
@@ -518,6 +517,7 @@ function tileScene() {
     const box = $(id);
     box.replaceChildren();
     if (id === '#scene-front') box.style.opacity = scene && scene.frontOpacity ? String(scene.frontOpacity) : '';
+    box.style.filter = scene ? sceneFilter(scene) : '';
     if (!file) continue;
     const url = `url("${sceneUrl(scene, file)}")`;
     const tw = H * (scene.w || 55) / (scene.h || 52);

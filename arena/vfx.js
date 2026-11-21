@@ -1,6 +1,7 @@
 /* DFK Tales Arena — the game's visual effects on the field: sprite strips played over a hero's box.
    A hero's box (.ftr) is u x u px with the feet at (50%, 93%), as the rig draws them; one sprite pixel is one rig unit,
-   so an effect is drawn at u / 100 * zoom px per pixel with its pivot on the feet (or on another anchor).
+   so an effect is drawn at u / 100 * zoom px per pixel. Its pivot sits on the feet (or on another anchor): the pivot is
+   in PERCENT of the sprite (the game hands it to PIXI as anchor / 100), and the sprite mirrors around it.
    Data: ./vfx-data.js (read from the game client). */
 import DATA from './vfx-data.js?v=1';
 
@@ -43,13 +44,14 @@ export function play(node, fx, o) {
   const e = document.createElement('i');
   e.className = `vfx${o.back ? ' back' : ''}`;
   const ax = o.at ? o.at.x : o.u / 2, ay = o.at ? o.at.y : o.u * 0.93;
+  const pX = (px / 100) * W, pY = (py / 100) * H;
   Object.assign(e.style, {
-    left: `${ax - px * s}px`, top: `${ay - py * s}px`, width: `${W}px`, height: `${H}px`,
+    left: `${ax - pX}px`, top: `${ay - pY}px`, width: `${W}px`, height: `${H}px`,
     backgroundImage: `url("${url(path)}")`, backgroundSize: `${n * W}px ${H}px`,
   });
-  // Effects are drawn for a hero on the left; on the right they mirror, unless the game says never to.
-  const flip = noflip ? !!dflip : !!dflip !== (o.side === 'B');
-  if (flip) { e.style.transformOrigin = `${px * s}px ${py * s}px`; e.style.transform = 'scaleX(-1)'; }
+  // As in the game (CombatApp): mirrored when defaultFlip and on your side, or not defaultFlip and on the other side.
+  const flip = !noflip && (dflip ? o.side === 'A' : o.side !== 'A');
+  if (flip) { e.style.transformOrigin = `${pX}px ${pY}px`; e.style.transform = 'scaleX(-1)'; }
   if (blend === 'ADD') e.style.mixBlendMode = 'plus-lighter';
   else if (blend === 'SCREEN') e.style.mixBlendMode = 'screen';
   const start = () => {

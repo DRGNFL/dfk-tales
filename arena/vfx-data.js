@@ -6,7 +6,7 @@
      (flag S: once, on the side's middle; otherwise on each target), secondary* (dice and coins). Flag C: the game
      picks it on a condition (weapon, combo): this is the first choice. speed: frames per 1/60 s (0.2 = 12 fps).
    status: status -> [sheet, pivot x, pivot y, speed]: the loops over a hero; the game shows one at a time, in turn every 2.2 s.
-   Pivots are in the sprite's pixels and sit on the hero's feet; one sprite pixel = one rig unit. */
+   Pivots are in percent of the sprite (PIXI anchor x 100) and sit on the hero's feet; one sprite pixel = one rig unit. */
 export default {
   base: { R: 'https://defi-kingdoms.b-cdn.net/art-assets/effects', C: 'https://game.defikingdoms.com' },
   sheets: {
