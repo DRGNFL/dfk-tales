@@ -6,7 +6,9 @@ import {
 import { createAnimatedHeroCard } from 'https://esm.sh/@defikingdoms/game-sdk@0.1.0/renderer?deps=ethers@5.8.0';
 import { traitScore, heroScore, heroMult, heroScoreX, clearHeroScores } from '../assets/heroscore.js?v=1';
 import { getWallet, onWalletChange, mountWallet, sameAddr, shortAddr, saveLegion, readLegion, ago } from '../assets/session.js?v=1';
-import { decorate, mountSquad } from './squad-ui.js?v=1';
+import { decorate, mountSquad } from './squad-ui.js?v=2';
+import { heroLook, onArmoryChange, heroKey, wearerOf } from '../assets/armory.js?v=1';
+import { hookCardIcons } from '../assets/equip-ui.js?v=1';
 
 /* ================= vocab ================= */
 const RARITY = ['common', 'uncommon', 'rare', 'legendary', 'mythic'];
@@ -160,14 +162,32 @@ function heroViewerLink(h) {
   return a;
 }
 
+/* After a change in the armory: redraw the cards of the heroes involved. */
+function remountHeroes(changed) {
+  for (const entry of HEROES.cards.values()) {
+    if (!entry.mounted) continue;
+    if (changed && !changed.includes(heroKey(entry.item))) continue;
+    if (entry.handle && entry.handle.destroy) entry.handle.destroy();
+    entry.handle = null; entry.renderer = null;
+    HEROES.mount(entry);
+  }
+}
+onArmoryChange((d) => { remountHeroes(d && d.changed); GEAR.cards.clear(); if (current === 'gear') renderGrid(); });
+
 const HEROES = {
   key: 'heroes', label: 'Heroes', tabs: HERO_TABS, sorts: HERO_SORTS, gene: true, lazy: true,
   search: (h) => `${h.name} ${h.id} ${h.displayId}`,
   placeholder: (h) => `${h.name}\n#${h.displayId}`,
   mount(entry) {
     const h = entry.item;
-    const go = (gear) => {
-      entry.handle = createAnimatedHeroCard(h, { renderer: gear ? { gear } : {} });
+    const go = (chainGear) => {
+      // What the hero wears: the armory (set from the card's slot icons) or, if never edited, the chain.
+      const chainPet = (PETS.data || []).find((p) => p.equippedTo && String(p.equippedTo) === String(h.id)) || null;
+      const look = heroLook(h, chainGear, chainPet);
+      entry.handle = createAnimatedHeroCard(look.hero, { renderer: look.gear ? { gear: look.gear } : {} });
+      const opts = { pool: () => ({ gear: GEAR.data || [], pets: PETS.data || [] }), chainGear, chainPet };
+      const hook = () => hookCardIcons(entry.handle.element, h, opts);
+      if (!hook()) Promise.resolve(entry.handle.ready).then(hook, hook);
       const strip = el('div', 'hs');
       const a = el('span'); a.append('HEROSCORE ', el('b', null, fmtInt(heroScore(h))));
       const b = el('span', 'x'); b.append(`×${heroMult(h)} · HSX `, el('b', null, fmtInt(heroScoreX(h))));
@@ -466,7 +486,13 @@ const GEAR = {
       card.append(ul);
     }
     const eq = el('div', 'gequip');
-    if (e.equippedTo) {
+    const worn = wearerOf(e);
+    if (worn && worn.hero) {
+      eq.append(`${/Visage$/.test(worn.slot) ? 'Visage on' : 'Worn by'} `);
+      const a = el('button', 'link', worn.hero.name); a.type = 'button';
+      a.addEventListener('click', () => jumpToHero(worn.hero.id));
+      eq.append(a);
+    } else if (e.equippedTo) {
       eq.append('On ');
       const a = el('button', 'link', heroLabel(e.equippedTo)); a.type = 'button';
       a.addEventListener('click', () => jumpToHero(e.equippedTo));
@@ -1077,7 +1103,7 @@ const openMine = (w) => {
   openLegion(w, chainId);
 };
 mountWallet($('#wallet'), { onOpen: openMine, onConnect: openMine });
-mountSquad();
+mountSquad(() => ({ pets: PETS.data || [], gear: GEAR.data || [], addr: shown && shown.addr }));
 onWalletChange(renderWhose);
 
 // Which legion to show: the one in the link, else the last one you looked at, else yours.

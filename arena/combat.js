@@ -7,7 +7,7 @@
 import { ACT_AT, RETURN, dynamicStats, accuracy, focusOf, hitChance, defenceReduction, CRIT_MULT, BLOCK_BASE, targetable, startInitiative, codexBudget } from './engine.js?v=1';
 import { SQUIRE, MEDIUM_ARMOUR, SQUIRE_SHIELD, statsOf } from './rules.js?v=2';
 import { SKILLS, CLASS_SKILLS } from './skills.js?v=1';
-import { traitsOf } from './traits.js?v=1';
+import { traitsOf } from './traits.js?v=2';
 import { weaponFromGear, armourFromGear, extraFromGear, weaponSetOf } from './gear.js?v=1';
 import { petInBattle } from './pets.js?v=1';
 
@@ -151,6 +151,7 @@ export function tickOnce(b) {
       if ((b.tick - e.since) % 10 === 0) { e.n = (e.n || 0) + 1; events.push(...pureDamage(b, f, f.hpMax * Math.min(0.2, 0.02 * e.n), 'Poison')); }
     }
   }
+  events.push(...risePending(b));
   return events;
 }
 
@@ -226,9 +227,10 @@ export function endTurn(b, f, kind = 'action', usedSkill = null) {
   f.initiative = (kind === 'reposition' ? RETURN.reposition : kind === 'pass' ? RETURN.pass : 0) + bonus;
   b.active = null;
   checkWinner(b);
+  return risePending(b);
 }
 function checkWinner(b) {
-  for (const t of ['A', 'B']) if (teamOf(b, t).every((f) => !f.alive)) { b.over = true; b.winner = t === 'A' ? 'B' : 'A'; }
+  for (const t of ['A', 'B']) if (teamOf(b, t).every((f) => !f.alive && !f.pendingRevive)) { b.over = true; b.winner = t === 'A' ? 'B' : 'A'; }
 }
 
 /* ---------- targeting ---------- */
@@ -280,18 +282,26 @@ function loseHp(b, t, n) {
   if (t.hp === 0) ev.push(...knockOut(b, t));
   return ev;
 }
+/* A fighter falls. With Second Life (once) it stays down until the action that felled it is over, so the rest of a volley
+   finds nobody there, then rises (risePending). */
 function knockOut(b, t) {
-  if (hasTrait(t, 'secondLife') && !t.used.secondLife) {
-    t.used.secondLife = true;
-    t.hp = Math.round(0.25 * t.hpMax); t.channel = null;
-    t.fx = t.fx.filter((e) => !isNeg(e));
-    t.fx.push({ key: 'exhaust', turns: 1, noSkills: true, label: 'Exhausted', tag: 'EXHAUST' });
-    t.initiative = Math.max(t.initiative, 0) + 750;
-    return [{ type: 'status', target: t.id, text: `${t.name} falls and rises again: Second Life (+750 Initiative)`, tag: 'SECOND LIFE' }];
-  }
   t.alive = false; t.hp = 0; t.channel = null; t.fx = [];
+  if (hasTrait(t, 'secondLife') && !t.used.secondLife) { t.used.secondLife = true; t.pendingRevive = true; }
   checkWinner(b);
-  return [{ type: 'ko', target: t.id }];
+  return [{ type: 'ko', target: t.id, rising: !!t.pendingRevive }];
+}
+/* Second Life: back with 1/3 of max HP (the game's text, per Ge) and +750 Initiative, Exhausted for 1 turn. */
+export function risePending(b) {
+  const ev = [];
+  for (const f of b.fighters.filter((x) => x.pendingRevive)) {
+    f.pendingRevive = false; f.alive = true;
+    f.hp = Math.round(f.hpMax / 3);
+    f.initiative = 750;
+    f.fx = [{ key: 'exhaust', turns: 1, noSkills: true, label: 'Exhausted', tag: 'EXHAUST' }];
+    ev.push({ type: 'revive', target: f.id, text: `${f.name} rises again: Second Life, ${f.hp} HP, +750 Initiative`, tag: 'SECOND LIFE' });
+  }
+  if (ev.length) { b.over = false; b.winner = null; checkWinner(b); }
+  return ev;
 }
 /* Damage that has already hit: multipliers, defence, shares (Interception), barrier. Used by DoTs and by skills after their rolls. */
 function hitDamage(b, src, t, raw, type, label, opts = {}) {
@@ -463,7 +473,7 @@ function dispel(b, t) {
   return [{ type: 'status', target: t.id, text: `${t.name}: ${e.label || e.key} dispelled` }];
 }
 function revive(b, t, pct) {
-  if (t.alive) return [];
+  if (t.alive || t.pendingRevive) return [];
   t.alive = true; t.hp = Math.round(pct * t.hpMax); t.initiative = 0; t.fx = [];
   b.over = false; b.winner = null;
   return [{ type: 'revive', target: t.id, text: `${t.name} is back with ${t.hp} HP` }];
@@ -583,7 +593,7 @@ export function reachOf(f, s) {
 export function skillTargets(b, f, s) {
   if (s.target === 'enemy') return enemyTargets(b, f, reachOf(f, s));
   if (s.target === 'ally') return alliesOf(b, f).filter((x) => x.alive);
-  if (s.target === 'fallen') return alliesOf(b, f).filter((x) => !x.alive);
+  if (s.target === 'fallen') return alliesOf(b, f).filter((x) => !x.alive && !x.pendingRevive);
   return [];
 }
 export function useSkill(b, f, s, target) {
@@ -623,7 +633,7 @@ export function completeChannel(b, f) {
   let target = ch.target ? b.fighters.find((x) => x.id === ch.target) : null;
   if (target && !target.alive && ch.skill.target === 'enemy') target = enemyTargets(b, f, reachOf(f, ch.skill))[0] || null;
   const events = resolveSkill(b, f, ch.skill, target);
-  endTurn(b, f, 'action', ch.skill);
+  events.push(...endTurn(b, f, 'action', ch.skill));
   return events;
 }
 

@@ -5,7 +5,9 @@ import {
   HeroRenderer, createAnimatedHeroCard, HERO_ANIMATIONS, getHeroWeaponAnimationSet, professionAnimation, weaponAnimation,
 } from 'https://esm.sh/@defikingdoms/game-sdk@0.1.0/renderer?deps=ethers@5.8.0';
 import { heroScore, heroMult, heroScoreX, tierOf } from '../assets/heroscore.js?v=1';
-import { mountWallet, onWalletChange, getWallet, sameAddr, shortAddr, legionUrl } from '../assets/session.js?v=1';
+import { mountWallet, onWalletChange, getWallet, sameAddr, shortAddr, legionUrl, readLegion } from '../assets/session.js?v=1';
+import { heroLook, onArmoryChange, heroKey } from '../assets/armory.js?v=1';
+import { hookCardIcons } from '../assets/equip-ui.js?v=1';
 
 mountWallet(document.querySelector('#wallet'));
 
@@ -147,11 +149,17 @@ function render({ hero, chainId, gear, parents }) {
   paintOwner(); onWalletChange(paintOwner);
   tags.append(own);
 
-  renderFacts(hero, gear);
   renderLineage(hero, parents || [], dark);
   $('#grid').hidden = false;
-  mountCard(hero, gear, !!dark);
-  mountStage(hero, gear);
+  // What the hero wears: the armory (set from the slot icons of its card) or, if never edited here, the chain.
+  const dress = () => {
+    const look = heroLook(hero, gear);
+    renderFacts(hero, look.gear || {}, look.worn.pet);
+    mountCard(look.hero, look.gear, !!dark, { pool: () => readLegion(chainId, hero.owner).then((d) => (d ? { gear: d.gear || [], pets: d.pets || [] } : null)), chainGear: gear, raw: hero });
+    mountStage(hero, look.gear);
+  };
+  dress();
+  onArmoryChange((d) => { if (!d || !d.changed || d.changed.includes(heroKey(hero))) dress(); });
 }
 
 /* ================= facts ================= */
@@ -166,7 +174,7 @@ function skillLine(map, a, b) {
   return dd;
 }
 
-function renderFacts(hero, gear) {
+function renderFacts(hero, gear, pet) {
   const a = el('span'); a.append('HEROSCORE ', el('b', null, fmtInt(heroScore(hero))));
   const b = el('span', 'x'); b.append(`×${heroMult(hero)} · HSX `, el('b', null, fmtInt(heroScoreX(hero))));
   $('#hs').replaceChildren(a, b);
@@ -188,6 +196,7 @@ function renderFacts(hero, gear) {
     ['Stat boosts', el('dd', null, `${hero.statGenes.statBoost1.d} · ${hero.statGenes.statBoost2.d}`)],
     ['Summons', el('dd', null, `${hero.summonsRemaining} / ${hero.maxSummons}`)],
     ['Gear', el('dd', null, items.length ? items.map((g) => g.name).join(' · ') : gear ? 'None' : 'Not read')],
+    ['Pet', el('dd', null, pet ? `${pet.name}${pet.combat && pet.combat.revealed ? ` · ${pet.combat.name} ${'★'.repeat(pet.combat.tier)}` : ''}` : 'None')],
   ];
   $('#facts').replaceChildren(...rows.flatMap(([k, dd]) => [el('dt', null, k), dd]));
 }
@@ -231,14 +240,23 @@ function renderLineage(hero, parents, dark) {
 }
 
 /* ================= card ================= */
-function mountCard(hero, gear, dark) {
+let cardHandle = null, cardWired = false, page = 'front';
+function mountCard(hero, gear, dark, equipOpts) {
   const PAGES = ['front', 'stats', 'growth', 'genes', 'recessiveGenes', 'recessiveVisualGenes', 'history'];
+  if (cardHandle) { cardHandle.element.remove(); if (cardHandle.destroy) cardHandle.destroy(); }
   const handle = createAnimatedHeroCard(hero, { flipOnClick: false, renderer: gear ? { gear } : {} });
+  cardHandle = handle;
   const card = $('#card');
   card.prepend(handle.element);
   $('#badge').hidden = !dark;
-  let page = 'front';
+  // The seven slot icons around the portrait equip the hero.
+  const hook = () => hookCardIcons(handle.element, equipOpts.raw, { pool: equipOpts.pool, chainGear: equipOpts.chainGear });
+  if (!hook()) Promise.resolve(handle.ready).then(hook, hook);
+  if (page !== 'front') { handle.setPage(page); handle.flip(true); }
+  if (cardWired) return;
+  cardWired = true;
   const show = (p) => {
+    const handle = cardHandle;
     page = p;
     if (p === 'front') handle.flip(false);
     else { handle.setPage(p); handle.flip(true); }
@@ -252,7 +270,13 @@ function mountCard(hero, gear, dark) {
 }
 
 /* ================= stage ================= */
+let stageCtl = null;
 function mountStage(hero, gear) {
+  // Re-mountable: a new look (gear changed) tears down the old rig, its buttons and its clock.
+  if (stageCtl) stageCtl.abort();
+  stageCtl = new AbortController();
+  const sig = stageCtl.signal, L = { signal: sig };
+  for (const id of ['#scenes', '#actions', '#class-actions', '#poses']) $(id).replaceChildren();
   const stage = $('#stage');
   const canvas = $('#stage-canvas');
   const note = $('#note');
@@ -272,7 +296,7 @@ function mountStage(hero, gear) {
     const b = el('button', key === home ? 'is-home' : null, label);
     b.type = 'button'; b.dataset.scene = key;
     if (key === home) b.title = "The hero's background gene";
-    b.addEventListener('click', () => setScene(key));
+    b.addEventListener('click', () => setScene(key), L);
     $('#scenes').append(b);
   }
   setScene(home);
@@ -295,6 +319,7 @@ function mountStage(hero, gear) {
 
   // zoom 1.238: the hero stands half the stage tall, as on the Hotoyor page.
   renderer = new HeroRenderer(canvas, hero, { gear: gear || null, autoplay: false, zoom: 1.238, mix: 0.12, onEvent: showEvent });
+  sig.addEventListener('abort', () => { if (renderer.destroy) renderer.destroy(); canvas.classList.remove('mirror'); $('#btn-mirror').setAttribute('aria-pressed', 'false'); });
 
   const pretty = (name) => name.split('/').pop();
   const WEAPON_LABELS = {
@@ -305,6 +330,7 @@ function mountStage(hero, gear) {
   const ORDER = ['Hit', 'Hit Angled', 'Hit Alt', 'Hit2', 'Multishot', 'Draw', 'Channel', 'Charge', 'Combo', 'Melee', 'Gun', 'Special1', 'Special2', 'MoveForward', 'MoveBackward', 'Celebrate'];
 
   renderer.ready.then(async () => {
+    if (sig.aborted) return;
     const all = renderer.animations;
     const has = (n) => all.includes(n);
     const prefix = `WEAPONS/${set}/${set} `;
@@ -402,12 +428,12 @@ function mountStage(hero, gear) {
     // Buttons
     for (const a of ACTIONS) {
       const b = el('button', 'act', a[1]); b.type = 'button'; b.dataset.act = a[0]; b.title = a[2].map(pretty).join(' → ');
-      b.addEventListener('click', () => runAction(a));
+      b.addEventListener('click', () => runAction(a), L);
       $('#actions').append(b);
     }
     for (const a of CLASS_ACTIONS) {
       const b = el('button', 'act', a[1]); b.type = 'button'; b.dataset.act = a[0]; b.title = a[2][0];
-      b.addEventListener('click', () => runAction(a));
+      b.addEventListener('click', () => runAction(a), L);
       $('#class-actions').append(b);
     }
     $('#class-group').hidden = CLASS_ACTIONS.length === 0;
@@ -415,23 +441,24 @@ function mountStage(hero, gear) {
     for (const [id, label, anim] of POSES) {
       const b = el('button', null, label); b.type = 'button'; b.dataset.pose = id; b.title = pretty(anim);
       b.setAttribute('aria-pressed', String(id === loopPose[0]));
-      b.addEventListener('click', () => setPose(id));
+      b.addEventListener('click', () => setPose(id), L);
       $('#poses').append(b);
     }
-    document.querySelectorAll('[data-speed]').forEach((b) => b.addEventListener('click', () => setSpeed(Number(b.dataset.speed))));
-    $('#btn-pause').addEventListener('click', () => setPaused(!paused));
-    $('#btn-prev').addEventListener('click', () => step(-1));
-    $('#btn-next').addEventListener('click', () => step(1));
+    document.querySelectorAll('[data-speed]').forEach((b) => b.addEventListener('click', () => setSpeed(Number(b.dataset.speed)), L));
+    $('#btn-pause').addEventListener('click', () => setPaused(!paused), L);
+    $('#btn-prev').addEventListener('click', () => step(-1), L);
+    $('#btn-next').addEventListener('click', () => step(1), L);
     $('#btn-mirror').addEventListener('click', () => {
       mirrored = !mirrored;
       canvas.classList.toggle('mirror', mirrored);
       $('#btn-mirror').setAttribute('aria-pressed', String(mirrored));
-    });
+    }, L);
 
     // Load what the buttons play, then run the clock.
     note.textContent = 'Loading the animations…';
     const needed = [...new Set([...POSES.map((p) => p[2]), ...ACTIONS.flatMap((a) => a[2]), ...CLASS_ACTIONS.flatMap((a) => a[2])])];
     await renderer.preload(loopPose[2]);
+    if (sig.aborted) return;
     await start(loopPose[2], true);
     renderer.tick(0);
     note.hidden = true;
@@ -441,6 +468,7 @@ function mountStage(hero, gear) {
 
     let last = performance.now();
     const frame = (now) => {
+      if (sig.aborted) return;
       const dt = Math.min((now - last) / 1000, 0.1);
       last = now;
       if (!paused) {
@@ -458,7 +486,9 @@ function mountStage(hero, gear) {
     };
     requestAnimationFrame((n) => { last = n; frame(n); });
     // Keep the still frame sharp when the window changes size while paused.
-    new ResizeObserver(() => { if (paused) { if (view == null) renderer.tick(0); else renderer.renderAt(cur, view, { loop: curLoop }); } }).observe(canvas);
+    const ro = new ResizeObserver(() => { if (paused) { if (view == null) renderer.tick(0); else renderer.renderAt(cur, view, { loop: curLoop }); } });
+    ro.observe(canvas);
+    sig.addEventListener('abort', () => ro.disconnect());
   }).catch((e) => {
     console.error(e);
     note.hidden = false;

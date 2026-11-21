@@ -61,7 +61,7 @@ export const PASSIVE_TRAITS = {
   19: { id: 'toxic', name: 'Toxic', text: '+3% chance to Poison with every hit.' },
   24: { id: 'giantSlayer', name: 'Giant Slayer', text: '+10% damage to a target with more HP, +15% from 1.5x, +20% from 2x.' },
   25: { id: 'lastStand', name: 'Last Stand', text: 'Once: under 30% a hit stops at 10% HP; then Unstoppable and +40% physical and magical damage reduction for 15 ticks.' },
-  28: { id: 'secondLife', name: 'Second Life', text: 'Once: comes back with 25% HP and +750 Initiative, Exhausted for 1 turn.' },
+  28: { id: 'secondLife', name: 'Second Life', text: 'Once: when it falls, it rises again at the end of that action with 1/3 of max HP and +750 Initiative, Exhausted for 1 turn.' },
 };
 
 /* The four dominant trait genes of a hero. Returns { actives: [skill...], passives: [{...}] }; unknown genes are skipped. */
