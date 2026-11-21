@@ -6,6 +6,7 @@ import {
 import { createAnimatedHeroCard } from 'https://esm.sh/@defikingdoms/game-sdk@0.1.0/renderer?deps=ethers@5.8.0';
 import { traitScore, heroScore, heroMult, heroScoreX, clearHeroScores } from '../assets/heroscore.js?v=1';
 import { getWallet, onWalletChange, mountWallet, sameAddr, shortAddr, saveLegion, readLegion, ago } from '../assets/session.js?v=1';
+import { decorate, mountSquad } from './squad-ui.js?v=1';
 
 /* ================= vocab ================= */
 const RARITY = ['common', 'uncommon', 'rare', 'legendary', 'mythic'];
@@ -173,6 +174,7 @@ const HEROES = {
       strip.append(a, heroViewerLink(h), b);
       entry.slot.replaceChildren(entry.handle.element, strip);
       entry.slot.classList.add('live');
+      decorate('heroes', entry);
       entry.handle.renderer.then((r) => { entry.renderer = r; if (!entry.visible) r.pause(); });
     };
     const { gear, missing } = heroGear(h);
@@ -319,6 +321,7 @@ const PETS = {
         strip.append(a, b);
         entry.slot.replaceChildren(root, strip);
         entry.slot.classList.add('live');
+        decorate('pets', entry);
         return;
       }
     }
@@ -348,6 +351,7 @@ const PETS = {
     card.append(body);
     entry.slot.replaceChildren(card);
     entry.slot.classList.add('live');
+    decorate('pets', entry);
     try {
       const r = new PetRenderer(cv, p, { scene: true });
       entry.renderer = r;
@@ -720,7 +724,7 @@ function renderGrid() {
       const slot = el('div', 'slot'); slot.dataset.id = id; slot.dataset.sec = sec.key;
       entry = { item: x, slot, mounted: false, renderer: null, visible: false };
       if (sec.lazy) slot.textContent = sec.placeholder(x);
-      else { slot.append(sec.render(x)); slot.classList.add('live'); }
+      else { slot.append(sec.render(x)); slot.classList.add('live'); decorate(sec.key, entry); }
       sec.cards.set(id, entry);
     }
     frag.append(entry.slot);
@@ -1073,6 +1077,7 @@ const openMine = (w) => {
   openLegion(w, chainId);
 };
 mountWallet($('#wallet'), { onOpen: openMine, onConnect: openMine });
+mountSquad();
 onWalletChange(renderWhose);
 
 // Which legion to show: the one in the link, else the last one you looked at, else yours.
