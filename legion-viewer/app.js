@@ -703,7 +703,8 @@ function levelSlider(sec, g) {
   const a = mk(cur.min != null ? cur.min : LO, 'from'), b = mk(cur.max != null ? cur.max : HI, 'to');
   const paint = () => {
     const lo = +a.value, hi = +b.value;
-    out.replaceChildren('Level ', el('b', null, String(lo)), ' – ', el('b', null, hi === HI ? `${HI}+` : String(hi)));
+    const open = hi === HI && !(sec.rng[g.id] && sec.rng[g.id].max != null);
+    out.replaceChildren('Level ', el('b', null, String(lo)), ' – ', el('b', null, open ? `${HI}+` : String(hi)));
     const p1 = (lo - LO) / (HI - LO), p2 = (hi - LO) / (HI - LO);
     fill.style.left = `calc(9px + (100% - 18px) * ${p1})`;
     fill.style.width = `calc((100% - 18px) * ${p2 - p1})`;
