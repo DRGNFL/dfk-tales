@@ -217,7 +217,7 @@ const PET_TABS = [
     range('pscore', "Hubert's Petscore", petScore, { hint: 'From the Hero Transcendence & Divine Essence deck' }),
     set('rarity', 'Rarity', (p) => [p.rarity], cap, { order: RARITY, swatch: (r) => `var(--r-${r})` }),
     set('element', 'Element', (p) => [p.element], cap),
-    set('egg', 'Egg', (p) => [p.eggType], (e) => `${cap(e)} egg`, { order: ['blue', 'grey', 'green'] }),
+    set('egg', 'Egg', (p) => [p.eggType], (e) => `${cap(e)} Egg`, { order: ['blue', 'grey', 'green'] }),
     set('profession', 'Boosts profession', (p) => [p.profession], cap),
     set('season', 'Season', (p) => [String(p.season)], (s) => `Season ${s}`, { order: 'key' }),
     set('family', 'Family', (p) => [p.species ? p.species.family : 'Unknown'], (v) => v, { wide: true }),
@@ -340,7 +340,7 @@ const PETS = {
     if (p.shiny) stage.append(el('span', 'shiny', 'SHINY'));
     card.append(stage);
     const body = el('div', 'pbody');
-    body.append(el('div', 'pid', `#${p.displayId} · S${p.season} · ${cap(p.eggType)} egg`));
+    body.append(el('div', 'pid', `#${p.displayId} · S${p.season} · ${cap(p.eggType)} Egg`));
     body.append(el('h3', 'pname', p.name));
     body.append(el('div', 'pmeta', `${p.species ? p.species.family : ''} · ${cap(p.rarity)} · ${cap(p.element)}`));
     const bl = el('div', 'blist');
