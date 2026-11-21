@@ -256,6 +256,13 @@ function bonusLine(kind, b) {
   row.append(el('span', 'bn', kind === 'X' && b.revealed && b.value ? `${name} ${b.value}%` : name));
   return row;
 }
+// The pet scene is 90 px and the renderer only scales it by whole steps, so pick a canvas size that is an
+// exact multiple of 90 on this screen and at least as big as the 228x212 portrait: the scene then fills it.
+function petSceneSide() {
+  const r = window.devicePixelRatio || 1;
+  for (let c = 228; c < 460; c++) { const d = Math.round(c * r); if (d % 90 === 0 && d / 90 >= 1) return c; }
+  return 270;
+}
 const setOwnText = (node, text) => { if (!node) return; const t = [...node.childNodes].find((n) => n.nodeType === 3 && n.textContent.trim()); if (t) t.textContent = text; else node.prepend(text); };
 function petCard(entry) {
   const p = entry.item;
@@ -266,15 +273,17 @@ function petCard(entry) {
   const handle = createHeroCard(fake, {
     flipOnClick: false,
     portrait: (frame) => {
-      frame.style.overflow = 'hidden';
-      const cv = document.createElement('canvas'); cv.width = 456; cv.height = 456;
-      cv.style.cssText = 'position:relative;z-index:1;width:228px;height:228px;margin-top:-8px;display:block;image-rendering:pixelated';
+      // Only the pet's own scene: no hero background behind it.
+      frame.style.overflow = 'hidden'; frame.style.background = '#000';
+      const cv = document.createElement('canvas'); const side = petSceneSide(); cv.width = cv.height = 90 * 4;
+      cv.style.cssText = `position:absolute;z-index:1;width:${side}px;height:${side}px;left:${Math.round((228 - side) / 2)}px;top:${Math.round((212 - side) / 2)}px;display:block;image-rendering:pixelated`;
       frame.append(cv);
       try { renderer = new PetRenderer(cv, p, { scene: true }); entry.renderer = renderer; if (!entry.visible) renderer.pause(); } catch (e) { console.error(e); }
       return () => renderer && renderer.destroy();
     },
   });
   const root = handle.element;
+  root.classList.add('is-pet');
   root.style.visibility = 'hidden';
   entry.handle = handle;
   const fix = () => {
@@ -284,9 +293,9 @@ function petCard(entry) {
     const eq = q('[class*="equippedIcons"]'); if (eq) eq.style.display = 'none';
     root.querySelectorAll('.dfk-heroCardFront .dfk-specials .dfk-icon').forEach((ic, i) => { if (i > 0) ic.style.display = 'none'; });
     setOwnText(q('.dfk-class'), p.species ? p.species.family : 'Pet');
-    setOwnText(q('.dfk-class .dfk-subClass'), `${cap(p.eggType)} egg`);
-    setOwnText(q('.dfk-level'), `Season ${p.season}`);
-    setOwnText(q('.dfk-level .dfk-subClass'), p.shiny ? 'Shiny' : cap(p.element));
+    setOwnText(q('.dfk-class .dfk-subClass'), '');
+    setOwnText(q('.dfk-level'), `${cap(p.eggType)} Egg`);
+    setOwnText(q('.dfk-level .dfk-subClass'), '');
     const rows = [['.dfk-statSummons', '.dfk-summonsBar', '.dfk-summonsAmount', p.gathering, 'Gathering'], ['.dfk-statStamina', '.dfk-staminaBar', '.dfk-staminaAmount', p.crafting, 'Crafting'], ['.dfk-statXp', '.dfk-xpBar', '.dfk-xpAmount', p.combat, 'Combat']];
     for (const [row, bar, amt, b, kind] of rows) {
       const name = b ? (b.revealed ? b.name : 'Unrevealed') : `No ${kind.toLowerCase()}`;
