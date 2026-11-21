@@ -46,6 +46,14 @@ a.btn:hover { border-color: var(--text); }
 .tier em { font: 600 10px var(--display); letter-spacing: .1em; color: var(--muted); font-style: normal; align-self: center; }
 .tier button { padding: 4px 6px; font: 600 11px var(--display); letter-spacing: .03em; text-transform: none; text-align: left; white-space: normal; line-height: 1.15; min-height: 30px; display: flex; gap: 6px; align-items: center; }
 .tier button svg { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.tier button img { width: 22px; height: 22px; flex: none; image-rendering: pixelated; }
+.tier button.pas img { opacity: .75; }
+.sh-head b img { width: 18px; height: 18px; vertical-align: -3px; margin-right: 6px; image-rendering: pixelated; }
+.chip img { width: 14px; height: 14px; vertical-align: -3px; margin-right: 4px; image-rendering: pixelated; }
+.seg { display: inline-flex; align-items: stretch; border: 1px solid var(--line-2); }
+.seg > span { font: 600 10px var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); padding: 0 8px; display: flex; align-items: center; }
+.seg button { border: 0; border-left: 1px solid var(--line-2); padding: 6px 12px; }
+.seg button[aria-pressed="true"] { background: var(--red); border-color: var(--red); color: #fff; }
 .tier button.pas { color: var(--muted); }
 .tier button.pas[aria-pressed="true"] { color: #444; }
 .tier.locked button { opacity: .25; pointer-events: none; }
@@ -91,6 +99,7 @@ a.btn:hover { border-color: var(--text); }
 .float.miss { color: #bbb; font-size: clamp(12px, 1.3vw, 16px); }
 .float.crit { color: #ffd34d; font-size: clamp(18px, 2.1vw, 26px); }
 .float.heal { color: #9be39b; }
+.float.abs { color: #9fb6cf; font-size: clamp(12px, 1.3vw, 16px); }
 .float.st { font-size: clamp(10px, 1vw, 13px); color: #ffb3ba; top: 33%; }
 .float.st.good { color: #e8e8e8; }
 @keyframes rise { from { opacity: 1; transform: translate(-50%, 0); } to { opacity: 0; transform: translate(-50%, -34px); } }
@@ -126,6 +135,12 @@ a.btn:hover { border-color: var(--text); }
 .side.b .plate .tags { justify-content: flex-end; }
 .plate .tags span { font: 600 8.5px var(--mono); padding: 0 3px; border: 1px solid #333; color: #ccc; }
 .plate .tags span.bad { border-color: var(--red); color: #ffb3ba; }
+.plate .tags span.st { position: relative; width: 18px; height: 18px; padding: 0; border: 0; border-bottom: 2px solid #3a3a3a; }
+.plate .tags span.st.bad { border-bottom-color: var(--red); }
+.plate .tags span.st img { width: 18px; height: 18px; display: block; image-rendering: pixelated; }
+.plate .tags span.st b { position: absolute; right: -3px; bottom: -4px; font: 700 8.5px var(--mono); color: #fff; text-shadow: 0 0 2px #000, 0 0 2px #000; }
+.plate .nm img { width: 13px; height: 13px; vertical-align: -2px; margin-right: 4px; image-rendering: pixelated; }
+.side.b .plate .nm img { margin: 0 0 0 4px; }
 
 .mid { display: grid; gap: 8px; align-content: start; justify-items: center; }
 .turnline { font: 700 13px var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); min-height: 18px; }
@@ -137,6 +152,9 @@ a.btn:hover { border-color: var(--text); }
 .tiles { display: grid; grid-template-columns: repeat(4, 42px); gap: 4px; }
 .tile { position: relative; width: 42px; height: 42px; padding: 0; border: 1px solid #333; background: #0d0d0d; color: #e8e8e8; display: grid; place-items: center; cursor: pointer; }
 .tile svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.tile img { width: 38px; height: 38px; image-rendering: pixelated; display: block; }
+.tile.passive img { opacity: .8; }
+.mid.ai .tiles { pointer-events: none; }
 .tile:hover:not([disabled]) { border-color: #fff; background: #161616; }
 .tile.primary { border-color: var(--red); color: #fff; background: #1a0306; }
 .tile.pick { border-color: var(--red); box-shadow: 0 0 0 1px var(--red), 0 0 12px rgba(227,23,43,.6); }
@@ -177,12 +195,12 @@ footer p { margin: 0; }
 
 <main class="ar">
   <section id="setup">
-    <div class="eyebrow">Practice arena · version 0.3 · you move both teams</div>
+    <div class="eyebrow">Practice arena · version 0.4 · eight classes · the right team can play itself</div>
     <h1>Arena</h1>
-    <p class="lead">Build the squad in the Legion Viewer (<b>Arena squad</b>). Heroes fight with what they wear: equip them from the icons around the portrait of their card. Here, one Codex skill per tier, then Fight.</p>
+    <p class="lead">Build the squad in the Legion Viewer (<b>Arena squad</b>). Heroes fight with what they wear: equip them from the icons around the portrait of their card. Here, one Codex skill per tier, then Fight. The right team is played by the computer unless you switch it to <b>You</b>.</p>
     <div class="row" style="justify-content:space-between;margin-top:12px">
       <span class="status" id="status">Reading the squad…</span>
-      <div class="row"><a class="btn" href="../legion-viewer/?squad=1">Edit squad</a><button type="button" class="primary" id="btn-fight" disabled>Fight</button></div>
+      <div class="row"><span class="seg" id="ai-switch" role="group" aria-label="Who plays the right team"><span>Right team</span><button type="button" data-v="ai">AI</button><button type="button" data-v="you">You</button></span><a class="btn" href="../legion-viewer/?squad=1">Edit squad</a><button type="button" class="primary" id="btn-fight" disabled>Fight</button></div>
     </div>
     <div class="squads" id="squads" style="margin-top:12px"></div>
   </section>
@@ -213,10 +231,10 @@ footer p { margin: 0; }
   <div class="tip" id="tip" hidden></div>
 
   <footer>
-    <p>Version 0.3. Gear and pets are what each hero wears in this browser, set from its card; without a weapon or armour a hero fights with the Squire weapon of its class and Medium armour, on loan. Melee or ranged comes from the weapon.</p>
-    <p>Skills from the patch notes up to 2.8.2, traits from the class pages, pet bonuses from the game's list. Stats, accuracy, Speed and starting Initiative: Hubert's Dynamic Stat Calculator. Each battle has a seed: the same seed and the same moves give the same battle.</p>
+    <p>Version 0.4. Gear and pets are what each hero wears in this browser, set from its card; without a weapon or armour a hero fights with the Squire weapon of its class and Medium armour, on loan. Melee or ranged comes from the weapon.</p>
+    <p>Skills from the patch notes up to 2.8.2 and, where they leave a gap, the game client's own texts; icons from the game client. Traits from the class pages, pet bonuses from the game's list. The computer opponent tries each legal move a few times and plays the one that does most. Stats, accuracy, Speed and starting Initiative: Hubert's Dynamic Stat Calculator. Each battle has a seed: the same seed and the same moves give the same battle.</p>
   </footer>
 </main>
-<script type="module" src="app.js?v=6"></script>
+<script type="module" src="app.js?v=7"></script>
 </body>
 </html>

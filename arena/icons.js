@@ -37,20 +37,49 @@ export const GLYPHS = {
 };
 export const svg = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${GLYPHS[k] || GLYPHS.ring}</svg>`;
 
-/* Which picture each skill, trait and pet skill gets. */
+/* The game's own pictures (copied from the game client into assets/game/). */
+const G = '../assets/game/';
+const FILE = {
+  'priest.prayerOfHealing': 'prayerofclarity', 'seer.osmoticWard': 'spellsap', 'seer.rejuvenationStone': 'rejuvinationstone',
+  'berserker.berserkir': 'berserkirmushroom', 'berserker.ulfhednar': 'ulfheonarmushroom', 'berserker.jofurr': 'jofurrmushroom',
+  'wizard.frostGrip': 'frosts-grip', 'wizard.iceRain': 'frost-pierce', 'wizard.pyroclast': 'pyroclast-explosion', 'wizard.wallOfReflection': 'wall-of-reflection',
+  'pirate.pirateCode': 'thepiratecode',
+};
+const TRAIT_FILE = {
+  poisonBlade: 'poisoned-blade', blindingWinds: 'blinding-winds', heal: 'heal', cleanse: 'cleanse', ironSkin: 'iron-skin', speed: 'speed', criticalAim: 'critical-aim',
+  deathmark: 'deathmark', exhaust: 'exhaust', daze: 'daze', explosion: 'explosion', hardenedShield: 'hardened-shield', stun: 'stun', secondWind: 'second-wind', resurrection: 'resurrection',
+  duelist: 'duelist', clutch: 'clutch', foresight: 'foresight', headstrong: 'headstrong', clearVision: 'clear-vision', fearless: 'fearless', chatterbox: 'chatterbox', stalwart: 'stalwart',
+  leadership: 'leadership', efficient: 'efficient', menacing: 'menacing', toxic: 'toxic', giantSlayer: 'giant-slayer', lastStand: 'last-stand', secondLife: 'second-life',
+};
+const PET_FILE = { Rebalance: 'rebalance', GuardianShell: 'guardian-shell', HealingBond: 'healing-bond', Foil: 'foil', Quicksand: 'quicksand', BeastlyRoar: 'beastly-roar', Maul: 'maul', Thwack: 'thwack' };
+/* Picture of a Codex skill, an active or passive trait, or a pet skill: { id, name, cls } -> URL, or null. */
+export function imgOf(s) {
+  const id = String(s.id || '').replace(/\.\d+$/, '');
+  if (id.startsWith('trait.')) { const f = TRAIT_FILE[id.slice(6)]; return f ? `${G}ability-icons/traits/${f}.png` : null; }
+  if (id.startsWith('pet.')) { const f = PET_FILE[id.slice(4)]; return f ? `${G}ability-icons/pet-bonuses/${f}.png` : null; }
+  if (TRAIT_FILE[id]) return `${G}ability-icons/traits/${TRAIT_FILE[id]}.png`;
+  const cls = s.cls || id.split('.')[0];
+  if (!cls || !s.name) return null;
+  const file = FILE[id] || (cls === 'wizard' ? s.name.toLowerCase().replace(/[^a-z ]/g, '').trim().replace(/ +/g, '-') : s.name.toLowerCase().normalize('NFD').replace(/[^a-z]/g, ''));
+  return `${G}ability-icons/${cls}/${file}.png`;
+}
+export const classImg = (cls) => `${G}class-icons/${String(cls).toLowerCase()}.png`;
+/* Status pictures from the game's tracker. */
+const STATUS = {
+  stun: 'stun', daze: 'daze', taunt: 'taunt', intimidate: 'intimidate', silence: 'silence', bleed: 'bleed', holyLight: 'damageovertime', hunterMark: 'damageovertime',
+  exhaust: 'exhaust', root: 'root', blind: 'blind', slow: 'slowness', poison: 'poison', confuse: 'confuse', fear: 'fear', burn: 'burn', chill: 'chill', berserk: 'berserk',
+  bmark: 'berserkers-mark', vuln: 'pdefdown', haste: 'haste', agi: 'swiftness', beacon: 'healovertime', bond: 'healovertime', unstoppable: 'unstoppable', ward: 'ward',
+  acc: 'accuracy', pierce: 'pierce', lifestealFx: 'lifesteal', attack: 'attack-potion', spell: 'spell-potion', physIn: 'toughness', mdef: 'magic-resist', eva: 'smoke-bomb',
+  dmgIn: 'pdefdown', dmgOut: 'attack-potion', riposte: 'pdefup', guarded: 'pdefup', royalGuarded: 'pdefup', firstMate: 'smoke-bomb', mpCut: 'precision-potion', sharpBasic: 'accuracy',
+};
+export function statusImg(key, value) {
+  if (key === 'pdef') return `${G}tracker-effects/special-indicators/${value < 0 ? 'pdefdown' : 'pdefup'}.png`;
+  const f = STATUS[key];
+  return f ? `${G}tracker-effects/special-indicators/${f}.png` : null;
+}
+
+/* Line glyphs, kept for the basic actions (attack, move, pass) and as a fallback. */
 export const ICON = {
-  'knight.challenge': 'taunt', 'knight.mightyStrike': 'sword', 'knight.shieldUp': 'shield', 'knight.forHonor': 'crown', 'knight.forValor': 'shield', 'knight.forTheKing': 'crown',
-  'knight.foreverVigilant': 'spiral', 'knight.holdTheLine': 'push', 'knight.ironWill': 'silence', 'knight.interception': 'shield', 'knight.shieldSmash': 'star', 'knight.ironclad': 'shield',
-  'knight.royalGuard': 'crown', 'knight.battleReady': 'swords', 'knight.ironShield': 'barrier',
-  'archer.multiShot': 'arrows', 'archer.precisionStrike': 'aim', 'archer.piercingShot': 'pierce', 'archer.flurry': 'arrows', 'archer.shroud': 'eye', 'archer.marksmanship': 'aim',
-  'archer.rapidShot': 'arrows', 'archer.sharpshooter': 'aim', 'archer.piercingArrow': 'pierce', 'archer.repeatingShot': 'swords', 'archer.deadAim': 'aim', 'archer.oneSmallStone': 'star',
-  'archer.barrage': 'burst', 'archer.twinArrows': 'arrows', 'archer.huntersMark': 'mark',
-  'priest.prayerOfHealing': 'heal', 'priest.holyLight': 'sun', 'priest.cleansingGift': 'sparkle', 'priest.divinePrayer': 'ring', 'priest.holyGuardian': 'heal', 'priest.blessingsOfLight': 'sparkle',
-  'priest.prayerOfMight': 'up', 'priest.holyCircle': 'healAll', 'priest.freedom': 'sparkle', 'priest.prayerOfProtection': 'barrier', 'priest.holyBeacon': 'sun', 'priest.swiftness': 'bolt',
-  'priest.divineBarrier': 'barrier', 'priest.holyWrath': 'burst', 'priest.fullHeal': 'revive',
-  'trait.poisonBlade': 'flask', 'trait.blindingWinds': 'eye', 'trait.heal': 'heal', 'trait.cleanse': 'sparkle', 'trait.ironSkin': 'shield', 'trait.speed': 'bolt', 'trait.criticalAim': 'aim',
-  'trait.deathmark': 'mark', 'trait.exhaust': 'down', 'trait.daze': 'spiral', 'trait.explosion': 'burst', 'trait.hardenedShield': 'shield', 'trait.stun': 'star', 'trait.secondWind': 'healAll',
-  'trait.resurrection': 'revive',
-  'pet.Rebalance': 'healAll', 'pet.GuardianShell': 'barrier', 'pet.HealingBond': 'link', 'pet.Foil': 'down', 'pet.Quicksand': 'down', 'pet.BeastlyRoar': 'taunt', 'pet.Maul': 'drop', 'pet.Thwack': 'star',
+  'trait.heal': 'heal', 'pet.Rebalance': 'healAll',
 };
 export const iconOf = (id) => ICON[String(id).replace(/\.\d+$/, '')] || 'ring';

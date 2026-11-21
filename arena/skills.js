@@ -1,8 +1,11 @@
-/* DFK Tales Arena — class skills (Skill Codex tiers 1-5), state after patch 2.8.2.
+/* DFK Tales Arena — class skills (Skill Codex tiers 1-5), state after patch 2.8.2. Knight, Archer and Priest here;
+   Warrior, Seer, Berserker, Wizard and Pirate in skills-more.js.
    Numbers from the patch notes and the class pages (see the project doc "dfk-abilita-classi").
    mana: [base, growth] -> cost = base + growth x level. amnesia: turns the skill stays locked after use.
    channel: Initiative the hero must gather before the skill resolves. Stat scores (STR.S...) are in percent points.
    Each skill's run(c, target) uses the battle context from combat.js. "note" lists what is not simulated yet. */
+
+import { MORE } from './skills-more.js?v=1';
 
 const sk = (cls, o) => ({ cls, id: `${cls}.${o.key}`, target: 'enemy', reach: 3, amnesia: 0, channel: 0, magic: false, ...o });
 const bleed = { key: 'bleed', label: 'Bleed', tag: 'BLEED', turns: 3, stackMax: 5 };
@@ -130,8 +133,10 @@ const ARCHER = [
     } }),
   sk('archer', { key: 'sharpshooter', tier: 3, branch: 'Precision', name: 'Sharpshooter', mana: [10.0, 1.0], channel: 1100, amnesia: 3, anim: 'WEAPONS/Bow/Bow Release',
     text: 'Channel 1100. 2.8·ATTACK + 1.5·DEX. Combo with Shroud: basic attacks made in the Archer\'s turn +2.0·ATTACK for 1 turn.',
-    note: 'The Shroud combo is not simulated yet.',
-    run(c, t) { c.strike(t, 2.8 * c.ATK + 1.5 * c.stat('DEX')); } }),
+    run(c, t) {
+      c.strike(t, 2.8 * c.ATK + 1.5 * c.stat('DEX'));
+      if (c.hasPassive('archer.shroud')) c.fx(c.src, { key: 'sharpBasic', value: 2.0 * c.ATK, turns: 1, label: 'Sharpshooter: basic attacks +2.0·ATTACK', tag: 'SHARPSHOOTER' });
+    } }),
   sk('archer', { key: 'piercingArrow', tier: 3, branch: 'Marksmanship', name: 'Piercing Arrow', mana: [6.0, 1.0], target: 'none', amnesia: 1, anim: 'WEAPONS/Bow/Bow Hit Angled',
     text: '1.7 / 1.0 / 0.7·ATTACK to P1 / P2 / P3; 40% Pierce; (30 + 2·STR.S + 3·LCK.S)% Bleed on each hit; stops if blocked.',
     run(c) {
@@ -143,10 +148,10 @@ const ARCHER = [
       }
     } }),
   sk('archer', { key: 'repeatingShot', tier: 4, branch: 'Flurry', name: 'Repeating Shot', mana: [10.0, 1.0], anim: 'WEAPONS/Bow/Bow Multishot',
-    text: '2 arrows of 1.3·ATTACK; combo after Rapid Shot: 3 arrows. The Archer is Exhausted for 1 turn.',
+    text: '2 arrows of 1.3·ATTACK; combo after Rapid Shot: 3 arrows, +0.8·DEX each (the client\'s text). The Archer is Exhausted for 1 turn.',
     run(c, t) {
-      const n = c.lastWas('archer.rapidShot') ? 3 : 2;
-      for (let i = 0; i < n; i++) c.strike(t, 1.3 * c.ATK);
+      const combo = c.lastWas('archer.rapidShot');
+      for (let i = 0; i < (combo ? 3 : 2); i++) c.strike(t, 1.3 * c.ATK + (combo ? 0.8 * c.stat('DEX') : 0));
       c.fx(c.src, { key: 'exhaust', turns: 1, noSkills: true, label: 'Exhausted', tag: 'EXHAUST' });
     } }),
   sk('archer', { key: 'deadAim', tier: 4, branch: 'Precision', name: 'Dead Aim', mana: [2.0, 1.0], channel: 1000, anim: 'WEAPONS/Bow/Bow Release',
@@ -245,6 +250,6 @@ const PRIEST = [
     run(c, t) { c.heal(t, t.hpMax - t.hp, 'Full Heal'); c.purify(t); c.initiative(300); c.fx(c.src, { key: 'exhaust', turns: 1, noSkills: true, label: 'Exhausted', tag: 'EXHAUST' }); } }),
 ];
 
-export const CLASS_SKILLS = { knight: KNIGHT, archer: ARCHER, priest: PRIEST };
-export const SKILLS = Object.fromEntries([...KNIGHT, ...ARCHER, ...PRIEST].map((s) => [s.id, s]));
+export const CLASS_SKILLS = { knight: KNIGHT, archer: ARCHER, priest: PRIEST, ...MORE };
+export const SKILLS = Object.fromEntries(Object.values(CLASS_SKILLS).flat().map((s) => [s.id, s]));
 export const READY_CLASSES = Object.keys(CLASS_SKILLS);

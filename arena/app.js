@@ -6,12 +6,13 @@ import { mountWallet } from '../assets/session.js?v=1';
 import { readSquad, onSquadChange, setSkills, isComplete } from '../assets/squad.js?v=2';
 import { battleKit, heroLook, SLOTS, onArmoryChange } from '../assets/armory.js?v=1';
 import { ACT_AT, makeRng, codexBudget } from './engine.js?v=1';
-import * as C from './combat.js?v=4';
-import { CLASS_SKILLS } from './skills.js?v=1';
+import * as C from './combat.js?v=5';
+import { CLASS_SKILLS } from './skills.js?v=2';
+import * as AI from './ai.js?v=1';
 import { traitsOf } from './traits.js?v=2';
 import { petInBattle } from './pets.js?v=1';
 import { SQUIRE } from './rules.js?v=2';
-import { svg, iconOf } from './icons.js?v=1';
+import { svg, iconOf, imgOf, classImg, statusImg } from './icons.js?v=2';
 
 const $ = (s) => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
@@ -19,6 +20,13 @@ const cap = (s) => (s ? String(s)[0].toUpperCase() + String(s).slice(1) : '');
 const fmt = (n) => Math.round(n).toLocaleString('en-US');
 const pct = (x) => `${(x * 100).toFixed(1)}%`;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const img = (src, cls) => { const i = document.createElement('img'); i.src = src; i.alt = ''; if (cls) i.className = cls; i.decoding = 'async'; return i; };
+/* Who plays the right team: the computer (default) or you. */
+const SIDE_KEY = 'dfk-tales:arena-right';
+const rightPlayer = () => { try { return localStorage.getItem(SIDE_KEY) === 'you' ? 'you' : 'ai'; } catch (e) { return 'ai'; } };
+function paintSwitch() { for (const b of document.querySelectorAll('#ai-switch button')) b.setAttribute('aria-pressed', String(b.dataset.v === rightPlayer())); }
+for (const b of document.querySelectorAll('#ai-switch button')) b.addEventListener('click', () => { try { localStorage.setItem(SIDE_KEY, b.dataset.v); } catch (e) { /* private mode */ } paintSwitch(); });
+paintSwitch();
 mountWallet($('#wallet'));
 
 const BG = `${getAssetConfig().assetsBaseUrl}/hero-card/assets/images/hero/backgrounds/`;
@@ -67,7 +75,8 @@ function sheet(team, i, slot) {
   const h = slot.hero;
   const box = el('div', 'sheet');
   const head = el('div', 'sh-head');
-  head.append(el('b', null, h.name), el('span', null, `P${i + 1} · ${cap(h.class)} / ${cap(h.subClass)} · Lv ${h.level}`));
+  const nb = el('b'); nb.append(img(classImg(h.class)), h.name);
+  head.append(nb, el('span', null, `P${i + 1} · ${cap(h.class)} / ${cap(h.subClass)} · Lv ${h.level}`));
   box.append(head);
   const desc = el('div', 'desc');
   const say = (name, text) => { desc.replaceChildren(el('b', null, name), ` ${text || ''}`); };
@@ -87,8 +96,9 @@ function sheet(team, i, slot) {
   }
   line.append(el('span', 'gap'));
   const tr = traitsOf(h);
-  for (const t of tr.actives) { const c = el('span', 'chip', t.name); tipOn(c, () => showTip(c, t.name, 'Active trait · once per battle', t.text)); line.append(c); }
-  for (const t of tr.passives) { const c = el('span', 'chip dim', t.name); tipOn(c, () => showTip(c, t.name, 'Passive trait', t.text)); line.append(c); }
+  const chip = (t, cls) => { const c = el('span', cls); const u = imgOf(t); if (u) c.append(img(u)); c.append(t.name); return c; };
+  for (const t of tr.actives) { const c = chip(t, 'chip'); tipOn(c, () => showTip(c, t.name, 'Active trait · once per battle', t.text)); line.append(c); }
+  for (const t of tr.passives) { const c = chip(t, 'chip dim'); tipOn(c, () => showTip(c, t.name, 'Passive trait', t.text)); line.append(c); }
   box.append(line);
 
   // Codex: one skill per tier
@@ -103,10 +113,11 @@ function sheet(team, i, slot) {
       row.append(el('em', null, `T${tier}`));
       for (const sk of list.filter((x) => x.tier === tier)) {
         const b = el('button', sk.passive ? 'pas' : null); b.type = 'button';
-        b.innerHTML = svg(iconOf(sk.id));
+        const u = imgOf(sk);
+        if (u) b.append(img(u)); else b.innerHTML = svg(iconOf(sk.id));
         b.append(sk.name);
         b.setAttribute('aria-pressed', String(picks.includes(sk.id)));
-        b.addEventListener('mouseenter', () => say(`${sk.name} · ${sk.branch}${sk.passive ? ' · passive' : ` · ${Math.round(sk.mana[0] + sk.mana[1] * h.level)} MP${sk.amnesia ? ` · Amnesia ${sk.amnesia}` : ''}${sk.channel ? ` · channel ${sk.channel}` : ''}`}`, sk.text + (sk.note ? ` (${sk.note})` : '')));
+        b.addEventListener('mouseenter', () => say(`${sk.name} · ${sk.branch}${sk.passive ? ' · passive' : ` · ${Math.round(sk.mana[0] + sk.mana[1] * h.level)} MP${sk.ap ? ` · ${sk.ap} AP` : sk.apX ? ' · X AP' : ''}${sk.amnesia ? ` · Amnesia ${sk.amnesia}` : ''}${sk.channel ? ` · channel ${typeof sk.channel === 'function' ? '50 + 50·X' : sk.channel}` : ''}`}`, sk.text + (sk.note ? ` (${sk.note})` : '')));
         b.addEventListener('click', () => {
           const next = picks.filter((id) => !list.some((x) => x.id === id && x.tier === tier));
           next.push(sk.id);
@@ -162,11 +173,11 @@ function startBattle() {
   }
   const seed = (Date.now() ^ (Math.random() * 0x7fffffff)) >>> 0;
   const b = C.createBattle({ heroes, rng: makeRng(seed), loadouts });
-  Object.assign(b, { seed, stopped: false, turn: null, busy: false, cap: s.cap });
+  Object.assign(b, { seed, stopped: false, turn: null, busy: false, cap: s.cap, ai: { A: false, B: rightPlayer() === 'ai' } });
   battle = b;
   $('#setup').hidden = true; $('#battle').hidden = false;
   $('#btn-rematch').hidden = true;
-  $('#b-eyebrow').textContent = `Level cap ${s.cap} · average level ${b.avgLvl.toFixed(1)} · seed ${seed}`;
+  $('#b-eyebrow').textContent = `Level cap ${s.cap} · average level ${b.avgLvl.toFixed(1)} · right team: ${b.ai.B ? 'AI' : 'you'} · seed ${seed}`;
   $('#log').replaceChildren();
   log(`Battle starts. Seed ${seed}.`, 'sys');
   b.fighters.filter((f) => f.luckyStart).forEach((f) => log(`${f.name} starts lucky: triple Initiative.`, 'sys'));
@@ -220,13 +231,14 @@ function buildPlates() {
     const pt = el('div', 'pt'); const pc = el('canvas'); pc.width = 44; pc.height = 44; pt.append(pc);
     const info = el('div');
     const nm = el('div', 'nm');
-    nm.append(f.name.split(' ')[0], el('small', null, ''));
+    const ci = img(classImg(f.cls));
+    if (f.team === 'B') nm.append(el('small', null, ''), f.name.split(' ')[0], ci); else nm.append(ci, f.name.split(' ')[0], el('small', null, ''));
     info.append(nm, bar('hp'), bar('mp'));
     if (f.cls === 'wizard') info.append(bar('ap'));
     info.append(el('div', 'tags'));
     p.append(pt, info);
     p.addEventListener('click', () => onFighterClick(f));
-    tipOn(p, () => { const sh = C.sheet(battle, f); showTip(p, f.name, `${cap(f.hero.class)} · Lv ${f.level} · P${f.pos} · ${f.weapon.name}${f.weapon.loaned ? ' (loaned)' : ''}`, `HP ${fmt(f.hp)} / ${fmt(f.hpMax)} · MP ${fmt(f.mp)} / ${fmt(f.mpMax)} · ATK ${fmt(sh.attack)} · SPELL ${fmt(sh.spell)} · P.DEF ${fmt(sh.pdef)} · M.DEF ${fmt(sh.mdef)} · EVA ${pct(sh.evasion)} · CRIT ${pct(sh.crit)} · Speed ${sh.speed.toFixed(1)}`); });
+    tipOn(p, () => { const sh = C.sheet(battle, f); showTip(p, f.name, `${cap(f.hero.class)} · Lv ${f.level} · P${f.pos} · ${f.weapon.name}${f.weapon.loaned ? ' (loaned)' : ''}`, `HP ${fmt(f.hp)} / ${fmt(f.hpMax)} · MP ${fmt(f.mp)} / ${fmt(f.mpMax)}${f.cls === 'wizard' ? ` · Arcane Power ${f.ap} / ${C.AP_MAX}` : ''} · ATK ${fmt(sh.attack)} · SPELL ${fmt(sh.spell)} · P.DEF ${fmt(sh.pdef)} · M.DEF ${fmt(sh.mdef)} · EVA ${pct(sh.evasion)} · CRIT ${pct(sh.crit)} · Speed ${sh.speed.toFixed(1)}`, C.tags(f).map((t) => t.name).join(' · ') || null); });
     f.plate = p; f.portrait = pc;
     $(`#side-${f.team.toLowerCase()}`).append(p);
   }
@@ -266,15 +278,25 @@ function paint() {
     const barrier = f.fx.find((e) => e.key === 'barrier');
     setBar(f.plate, 'hp', f.hp, f.hpMax, barrier ? barrier.value : 0);
     setBar(f.plate, 'mp', f.mp, f.mpMax);
-    setBar(f.plate, 'ap', f.ap || 0, 100);
+    setBar(f.plate, 'ap', f.ap || 0, C.AP_MAX);
     f.plate.querySelector('.nm small').textContent = `${fmt(f.hp)}`;
-    f.plate.querySelector('.tags').replaceChildren(...C.tags(f).map((t) => el('span', t.bad ? 'bad' : null, t.text)));
+    f.plate.querySelector('.tags').replaceChildren(...C.tags(f).map(tagNode));
     drawHead(f, f.portrait);
     drawHead(f, f.markerCanvas);
   }
   $('#tick').textContent = `tick ${b.tick}`;
 }
 
+/* A status on a plate: the game's tracker icon with its stacks, or a short word when the game has no icon for it. */
+function tagNode(t) {
+  const src = t.key !== 'barrier' && t.key !== 'channel' && statusImg(t.key, t.value != null ? t.value : t.bad ? -1 : 1);
+  if (!src) return el('span', t.bad ? 'bad' : null, t.text);
+  const n = el('span', `st${t.bad ? ' bad' : ''}`);
+  n.title = `${t.name}${t.left ? ` · ${t.left}${/t$/.test(t.left) ? '' : ' ticks'}` : ''}`;
+  n.append(img(src));
+  if (t.stacks) n.append(el('b', null, String(t.stacks)));
+  return n;
+}
 function log(text, cls) { $('#log').prepend(el('li', cls || null, text)); }
 function floatText(f, text, cls, n = 0) {
   const s = el('span', `float${cls ? ` ${cls}` : ''}`, text);
@@ -293,9 +315,10 @@ function showEvents(events) {
   const bump = (id) => (n[id] = (n[id] || 0) + 1) - 1;
   for (const e of events) {
     const t = e.target && byId(e.target);
-    if (e.type === 'skill') { if (e.skill !== 'Attack') log(`${nameOf(e.source)}: ${e.skill}${e.target ? ` → ${nameOf(e.target)}` : ''}`, 'hit'); continue; }
+    if (e.type === 'skill') { if (e.skill !== 'Attack') log(`${nameOf(e.source)}: ${e.skill}${e.target ? ` → ${nameOf(e.target)}` : ''}`, 'hit'); if (e.delayed && byId(e.source)) floatText(byId(e.source), e.skill.replace(' (delayed)', ''), 'st good', bump(e.source)); continue; }
     if (e.type === 'damage') {
-      floatText(t, `${e.amount}${e.crit ? '!' : ''}`, e.crit ? 'crit' : null, bump(t.id));
+      if (e.amount === 0 && e.absorbed > 0) floatText(t, `(${e.absorbed})`, 'abs', bump(t.id));
+      else floatText(t, `${e.amount}${e.crit ? '!' : ''}`, e.crit ? 'crit' : null, bump(t.id));
       if (t.alive && e.amount > 0) { playAnim(t, HERO_ANIMATIONS.hurt, false); setTimeout(() => t.alive && !b.stopped && playAnim(t, t.idle, true), 700); }
       const bits = [e.crit && 'critical', e.blocked && 'blocked', e.absorbed && `${e.absorbed} absorbed`, e.chance != null && `${Math.round(e.chance * 100)}%`].filter(Boolean);
       log(`${e.label ? `${e.label} ` : ''}→ ${t.name} −${e.amount}${bits.length ? ` (${bits.join(', ')})` : ''}`, 'sub hit');
@@ -310,6 +333,7 @@ function showEvents(events) {
       log(e.text, 'hit');
     }
     else if (e.type === 'move') { place(); log(e.text, 'sub'); }
+    else if (e.type === 'ap') { if (e.amount >= 3) floatText(t, `+${e.amount} AP`, 'st good', bump(t.id)); log(e.text, 'sub'); }
     else if (e.type === 'channel') log(e.text, 'hit');
   }
 }
@@ -364,7 +388,10 @@ async function runLoop() {
     const st = C.startTurn(b, f);
     if (st.events.length) { b.turn = f; showEvents(st.events); paint(); await sleep(550); }
     if (b.stopped || b.over) break;
-    if (st.lost) { await after(C.endTurn(b, f, 'action')); b.turn = null; paint(); await sleep(250); continue; }
+    if (st.lost) { await after(C.endTurn(b, f, 'lost')); b.turn = null; paint(); await sleep(250); continue; }
+    const forced = C.forcedAction(b, f);
+    if (forced) { forcedTurn(f, forced); return; }
+    if (b.ai[f.team]) { aiTurn(f); return; }
     offerTurn(f);
     return;
   }
@@ -377,8 +404,45 @@ function turnLine(f, extra) {
   t.replaceChildren('Turn · ', el('b', f.team === 'B' ? 'b' : null, f.name), extra ? ` · ${extra}` : '');
 }
 function clearHand() {
+  hideTip();
   for (const id of ['#g-actions', '#g-skills', '#g-passives']) $(id).replaceChildren();
   $('#turnline').replaceChildren();
+}
+
+/* A Berserk or Confused hero attacks on its own. */
+async function forcedTurn(f, act) {
+  const b = battle;
+  b.turn = f; b.busy = false;
+  clearHand(); paint();
+  turnLine(f, `${act.why}: attacks ${act.target.name}`);
+  log(`${f.name} is ${act.why} and attacks on its own.`, 'sys');
+  await sleep(600);
+  if (b.stopped) return;
+  doAttack(f, act.target);
+}
+/* The computer's turn: it shows its hand, thinks, marks the move, plays it. */
+async function aiTurn(f) {
+  const b = battle;
+  b.turn = f; b.busy = true;
+  paint();
+  turnLine(f, 'thinking…');
+  renderHand(f);
+  $('.hud .mid').classList.add('ai');
+  await sleep(420);
+  if (b.stopped) return;
+  const d = AI.decide(b, f);
+  const sel = d.kind === 'skill' ? `.tile[data-skill="${CSS.escape(d.skill.id)}"]` : d.kind === 'attack' ? '#g-actions .tile.primary' : '#g-actions .tile[data-act="pass"]';
+  const btn = document.querySelector(sel);
+  if (btn) btn.classList.add('pick');
+  if (d.target) for (const n of [d.target.node, d.target.plate]) n.classList.add('can');
+  turnLine(f, d.kind === 'pass' ? 'passes' : `${d.kind === 'skill' ? d.skill.name : 'Attack'}${d.target ? ` → ${d.target.name}` : ''}`);
+  await sleep(650);
+  $('.hud .mid').classList.remove('ai');
+  if (b.stopped) return;
+  b.busy = false;
+  if (d.kind === 'attack') doAttack(f, d.target);
+  else if (d.kind === 'skill') doSkill(f, d.skill, d.target);
+  else { b.busy = true; clearTargets(); log(`${f.name} passes.`); finishAction(f, 'pass'); }
 }
 
 function offerTurn(f) {
@@ -394,6 +458,7 @@ function offerTurn(f) {
 function renderHand(f) {
   const b = battle;
   const A = $('#g-actions'), K = $('#g-skills'), P = $('#g-passives');
+  hideTip();
   A.replaceChildren(); K.replaceChildren(); P.replaceChildren();
   const pad = (box) => { while (box.children.length % 4) box.append(el('span', 'tile empty')); };
 
@@ -418,6 +483,7 @@ function renderHand(f) {
     A.append(t);
   }
   const pass = tile('pass');
+  pass.dataset.act = 'pass';
   tipOn(pass, () => showTip(pass, 'Pass', null, 'Gives back 400 Initiative.'));
   pass.addEventListener('click', () => { if (b.busy) return; b.busy = true; hideTip(); clearTargets(); log(`${f.name} passes.`); finishAction(f, 'pass'); });
   A.append(pass);
@@ -426,15 +492,21 @@ function renderHand(f) {
   pad(A);
 
   for (const s of f.skills) K.append(actTile(f, s));
-  if (!CLASS_SKILLS[f.cls]) { const t = tile('ring', 'passive'); tipOn(t, () => showTip(t, `No Codex for the ${cap(f.cls)} yet`, null, 'Its class skills come after Knight, Archer and Priest.')); K.append(t); }
+  if (!CLASS_SKILLS[f.cls]) { const t = tile('ring', 'passive'); tipOn(t, () => showTip(t, `No Codex for the ${cap(f.cls)}`, null, 'The game never gave this class a Skill Codex: basic attack, traits, pet and gear.')); K.append(t); }
   pad(K);
 
-  for (const p of f.passives) P.append(passiveTile(iconOf(p.id), p.name, 'Codex passive', p.text));
-  for (const p of f.traitPassives) P.append(passiveTile('ring', p.name, 'Passive trait', p.text, 'T'));
+  if (f.cls === 'berserker') P.append(passiveTile({ id: 'berserker.momentOfClarity', cls: 'berserker', name: 'Moment of Clarity', img: '../assets/game/ability-icons/berserker/howl.png' }, 'Moment of Clarity', 'Berserker · always on', 'After an action that hurt allies: (4·STR.S + 4·LCK.S)% Berserker\'s Mark on a random enemy for 40 ticks; then, if an enemy has the Mark, Berserk for 30 ticks.'));
+  for (const p of f.passives) P.append(passiveTile(p, p.name, 'Codex passive', p.text));
+  for (const p of f.traitPassives) P.append(passiveTile(p, p.name, 'Passive trait', p.text, 'T'));
   if (f.pet && f.pet.bonus && !f.petSkill) { const bn = f.pet.bonus; P.append(passiveTile('paw', `${bn.name} ${'★'.repeat(bn.tier)}`, `${f.pet.name}${bn.kind === 'inactive' ? ' · not in play yet' : ''}`, bn.text, 'P')); }
   pad(P);
 }
-function tile(icon, cls) { const t = el('button', `tile${cls ? ` ${cls}` : ''}`); t.type = 'button'; t.innerHTML = svg(icon); return t; }
+function tile(icon, cls) {
+  const t = el('button', `tile${cls ? ` ${cls}` : ''}`); t.type = 'button';
+  const u = icon && typeof icon === 'object' ? icon.img || imgOf(icon) : null;
+  if (u) t.append(img(u)); else t.innerHTML = svg(typeof icon === 'object' ? iconOf(icon.id) : icon);
+  return t;
+}
 function passiveTile(icon, name, meta, text, tag) {
   const t = tile(icon, 'passive');
   if (tag) t.append(el('span', 'tag', tag));
@@ -443,18 +515,18 @@ function passiveTile(icon, name, meta, text, tag) {
 }
 function actTile(f, s, kind) {
   const b = battle;
-  const t = tile(iconOf(s.id), kind || null);
+  const t = tile(s, kind || null);
   const blocked = C.skillBlocked(b, f, s);
-  const needs = ['enemy', 'ally', 'fallen'].includes(s.target);
+  const needs = ['enemy', 'ally', 'allyOther', 'fallen'].includes(s.target);
   const targets = needs ? C.skillTargets(b, f, s) : [];
   const noTarget = needs && !targets.length;
   if (kind) t.append(el('span', 'tag', kind === 'pet' ? 'P' : 'T'));
-  if (!s.trait) t.append(el('span', 'mp', String(C.manaCost(f, s))));
+  if (!s.trait) t.append(el('span', 'mp', s.ap ? `${C.manaCost(f, s)}·${s.ap}` : String(C.manaCost(f, s))));
   if (!s.trait && f.cd[s.id] > 0) t.append(el('span', 'cd', String(f.cd[s.id])));
   if (s.trait && f.used[s.id]) t.append(el('span', 'cd', '×'));
   t.disabled = !!blocked || noTarget;
   t.dataset.skill = s.id;
-  const meta = [kind === 'trait' ? 'Active trait · once per battle' : kind === 'pet' ? `${f.pet.name} · pet skill · once per battle` : `${C.manaCost(f, s)} MP${s.amnesia ? ` · Amnesia ${s.amnesia}` : ''}`, s.channel && `channel ${s.channel}`].filter(Boolean).join(' · ');
+  const meta = [kind === 'trait' ? 'Active trait · once per battle' : kind === 'pet' ? `${f.pet.name} · pet skill · once per battle` : `${C.manaCost(f, s)} MP${s.ap ? ` · ${s.ap} AP` : s.apX ? ` · all AP up to 30 (now ${Math.min(30, f.ap)})` : ''}${s.amnesia ? ` · Amnesia ${s.amnesia}` : ''}`, s.channel && `channel ${typeof s.channel === 'function' ? C.channelOf(s, Math.min(30, f.ap)) : s.channel}`].filter(Boolean).join(' · ');
   const why = blocked || (noTarget ? (s.target === 'fallen' ? 'Nobody is down' : 'No target in reach') : null);
   tipOn(t, () => showTip(t, s.name, meta, `${s.text}${s.note ? ` (${s.note})` : ''}`, why));
   t.addEventListener('click', () => {
