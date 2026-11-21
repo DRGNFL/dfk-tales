@@ -868,7 +868,8 @@ function applyLegion(data, my) {
    from the chain in the background and swapped in only if something changed, keeping filters and scroll. */
 const STALE = 15 * 60 * 1000;
 let shownData = null, shownAt = 0, refreshing = false, retryAt = 0;
-const digest = (d) => JSON.stringify(d, (k, v) => (typeof v === 'bigint' ? v.toString() : v));
+// Fixed order: the parts arrive from the chain in any order, and that alone must not count as a change.
+const digest = (d) => JSON.stringify(['gear', 'heroes', 'pets', 'items', 'tokens'].map((k) => d[k]), (k, v) => (typeof v === 'bigint' ? v.toString() : v));
 const keptLine = () => `Read from the chain ${ago(shownAt)}, kept in this browser. It updates by itself every 15 minutes; Load legion reads it now.`;
 
 async function openLegion(addr, chainId, { fresh = false } = {}) {
