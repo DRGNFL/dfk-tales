@@ -203,7 +203,7 @@ const HEROES = {
   metric: heroScoreX,
   metricLabel: 'Heroscore X',
   title: 'Legion',
-  headScore: (list) => ['Heroscore X', bigNum(list.reduce((t, h) => t + heroScoreX(h), 0))],
+  headScore: (list) => ['Heroscore X', bigNum(list.reduce((t, h) => t + heroScoreX(h), 0)), 'Heroscore + Trait Score'],
   slotSize: 'hero',
 };
 
@@ -573,9 +573,6 @@ function orderKeys(g, keys, counts) {
 function buildSidebar() {
   const sec = S();
   $('#scope-wrap').hidden = !sec.gene;
-  $('#facet-wrap').hidden = !sec.metric;
-  document.querySelectorAll('[data-facet]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.facet === facetMode)));
-  const fs = document.getElementById('facet-score'); if (fs && sec.metricLabel) fs.textContent = sec.metricLabel;
   if (sec.state !== 'ready') {
     $('#tabs').replaceChildren();
     $('#panels').replaceChildren(el('p', 'side-empty', sec.state === 'loading' ? `Reading ${sec.label.toLowerCase()}…` : 'Load a legion to filter it.'));
@@ -669,22 +666,16 @@ function syncHeader() {
   $('#btn-reset').disabled = n === 0;
 }
 
-let facetMode = store.get('dfk-tales:facet') || 'score';
 function updateFacets() {
   const sec = S();
   if (sec.state !== 'ready') return;
-  const byScore = facetMode === 'score' && sec.metric;
   for (const g of sec.groups) {
     const det = document.querySelector(`.fg[data-group="${g.id}"]`);
     if (!det) continue;
     if (g.type === 'set') {
       const counts = new Map();
-      for (const x of sec.data) if (matches(sec, x, g.id)) { const w = byScore ? sec.metric(x) : 1; for (const v of sec.cache.get(sec.idOf(x))[g.id]) counts.set(v, (counts.get(v) || 0) + w); }
-      const opts = [...det.querySelectorAll('.opt')];
-      opts.forEach((l) => { const k = counts.get(l.dataset.key) || 0; l.querySelector('.ct').textContent = byScore ? compact(k) : k; l.classList.toggle('zero', k === 0); });
-      if (byScore) { const box = det.querySelector('.opts'); opts.sort((a, b) => (counts.get(b.dataset.key) || 0) - (counts.get(a.dataset.key) || 0)).forEach((l) => box.append(l)); }
-      else if (det.dataset.scored) { const box = det.querySelector('.opts'); opts.sort((a, b) => Number(a.dataset.i) - Number(b.dataset.i)).forEach((l) => box.append(l)); }
-      det.dataset.scored = byScore ? '1' : '';
+      for (const x of sec.data) if (matches(sec, x, g.id)) for (const v of sec.cache.get(sec.idOf(x))[g.id]) counts.set(v, (counts.get(v) || 0) + 1);
+      det.querySelectorAll('.opt').forEach((l) => { const k = counts.get(l.dataset.key) || 0; l.querySelector('.ct').textContent = k; l.classList.toggle('zero', k === 0); });
       det.querySelector('.on').textContent = groupActive(sec, g) ? `${sec.sel[g.id].size} ON` : '';
     } else det.querySelector('.on').textContent = groupActive(sec, g) ? 'ON' : '';
   }
@@ -733,8 +724,11 @@ function renderGrid() {
     if (sec.lazy) io.observe(entry.slot);
   }
   grid.replaceChildren(frag);
-  const c = $('#count'); c.replaceChildren('Showing ', el('b', null, String(list.length)), ` of ${sec.data.length}`);
-  if (sec.subtotal && list.length) c.append(' · ', el('b', null, sec.subtotal(list)));
+  const c = $('#count');
+  if (list.length < sec.data.length) {
+    c.replaceChildren('Showing ', el('b', null, String(list.length)), ` of ${sec.data.length}`);
+    if (sec.subtotal && list.length) c.append(' · ', el('b', null, sec.subtotal(list)));
+  } else c.replaceChildren();
 }
 
 let timer = 0;
@@ -747,11 +741,12 @@ function renderHeadline() {
   $('#total').textContent = sec.state === 'ready' ? sec.data.length : '';
   const hs = $('#sec-score');
   if (sec.headScore && sec.state === 'ready' && sec.data.length) {
-    const [label, value] = sec.headScore(sec.data);
-    hs.replaceChildren(el('em', null, label), el('span', null, value));
+    const [label, value, desc] = sec.headScore(sec.data);
+    const num = el('span', 'num', value);
+    if (desc) num.append(el('small', null, desc));
+    hs.replaceChildren(el('em', null, label), num);
     hs.hidden = false;
   } else hs.hidden = true;
-  $('#who').textContent = owner ? `${owner.slice(0, 6)}…${owner.slice(-4)} · ${chainName}` : '';
   const ready = sec.state === 'ready' && sec.data.length;
   $('#tiles').replaceChildren(...(ready ? sec.tiles(sec.data) : []).map(([k, v]) => { const d = el('div', 'tile'); d.append(el('span', 'label', k), el('b', null, String(v))); return d; }));
   const showBar = ready && sec.rarity;
@@ -875,8 +870,8 @@ async function load() {
   await Promise.allSettled([pHeroes, pGear, pPets, pItems, pTokens]);
   if (my !== run) return;
   $('#btn-load').disabled = false;
-  const parts = Object.values(SECTIONS).map((s) => `${s.state === 'ready' ? s.data.length : '—'} ${s.label.toLowerCase()}`);
-  setStatus(`Loaded ${parts.join(' · ')}.`);
+  const failed = Object.values(SECTIONS).filter((s) => s.state === 'error').map((s) => s.label.toLowerCase());
+  setStatus(failed.length ? `Could not read ${failed.join(', ')}. Load again in a moment.` : '', failed.length > 0);
 }
 
 /* ---------- wiring ---------- */
@@ -900,11 +895,6 @@ document.querySelectorAll('[data-scope]').forEach((b) => b.addEventListener('cli
 }));
 document.querySelectorAll('#sections [data-sec]').forEach((b) => b.addEventListener('click', () => show(b.dataset.sec)));
 $('#btn-filters').addEventListener('click', () => $('#side').classList.toggle('open'));
-document.querySelectorAll('[data-facet]').forEach((b) => b.addEventListener('click', () => {
-  facetMode = b.dataset.facet; store.set('dfk-tales:facet', facetMode);
-  document.querySelectorAll('[data-facet]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
-  updateFacets();
-}));
 document.querySelectorAll('[data-petview]').forEach((b) => b.addEventListener('click', () => {
   if (petView === b.dataset.petview) return;
   petView = b.dataset.petview; store.set('dfk-tales:petView', petView);

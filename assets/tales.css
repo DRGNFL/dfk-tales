@@ -10,6 +10,7 @@
   --red: #e3172b;
   --red-dim: #5c0a12;
   --display: "Chakra Petch", "Arial Narrow", system-ui, sans-serif;
+  --blackletter: "Jacquard 24", "Chakra Petch", "Old English Text MT", serif;
   --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   --r-common: #bdbdbd; --r-uncommon: #3ddc6b; --r-rare: #3d9bff; --r-legendary: #ff9a1f; --r-mythic: #c36bff;
@@ -25,7 +26,7 @@ a { color: inherit; }
   border-bottom: 1px solid var(--line); display: flex; align-items: stretch; gap: 0; height: 52px; padding: 0 16px;
 }
 .brand {
-  font-family: var(--display); font-weight: 700; font-size: 18px; letter-spacing: .14em; text-transform: uppercase;
+  font-family: var(--blackletter); font-weight: 400; font-size: 24px; letter-spacing: .02em;
   text-decoration: none; display: flex; align-items: center; gap: 10px; padding-right: 22px; margin-right: 6px;
   border-right: 1px solid var(--line);
 }
