@@ -151,7 +151,8 @@ function buildField() {
     const node = el('div', `ftr ${f.team.toLowerCase()}`);
     const canvas = el('canvas');
     const tag = el('div', 'tag');
-    tag.append(el('div', 'nm', f.name), el('div', 'hp'), el('div', 'meta'));
+    tag.append(el('div', 'nm', f.name.split(' ')[0]), el('div', 'hp'), el('div', 'meta'));
+    tag.title = f.name;
     tag.querySelector('.hp').append(el('i'));
     const body = el('button', 'body'); body.type = 'button'; body.setAttribute('aria-label', f.name);
     const chance = el('span', 'chance');
