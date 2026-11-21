@@ -376,6 +376,8 @@ const gr = (e) => String(e.rarity).toLowerCase();
 const EMPTY_ENCH = /empty enchantment slot/i;
 const realEnch = (e) => e.enchantments.filter((b) => !EMPTY_ENCH.test(b.text));
 const emptyEnch = (e) => e.enchantments.length - realEnch(e).length;
+// speedModifier is stored signed in one byte: 128+ means negative (dev docs).
+const speedPct = (m) => (1 - 2 * Math.floor(m / 128)) * (m % 128);
 const gearId = (e) => { try { return String(BigInt(e.id) % 1000000000000n); } catch (x) { return e.id; } };
 const GEAR_TABS = [
   { id: 'basics', label: 'Basics', groups: [
@@ -392,7 +394,7 @@ const GEAR_TABS = [
   { id: 'stats', label: 'Stats', groups: [
     range('dmg', 'Weapon base damage', (e) => (e.weapon ? e.weapon.baseDamage : null)),
     range('pot', 'Weapon base potency', (e) => (e.weapon ? e.weapon.basePotency : null)),
-    range('spd', 'Weapon speed modifier', (e) => (e.weapon ? e.weapon.speedModifier : null)),
+    range('spd', 'Weapon speed %', (e) => (e.weapon ? speedPct(e.weapon.speedModifier) : null)),
     range('acc', 'Accuracy requirement', (e) => (e.weapon ? e.weapon.accuracyRequirement : null), { closed: true }),
     range('foc', 'Focus requirement', (e) => (e.weapon ? e.weapon.focusRequirement : null), { closed: true }),
     set('pscale', 'Physical scaling', (e) => (e.weapon ? e.weapon.physicalScaling.map((s) => s.stat) : []), (v) => v, { order: STATS.map((s) => s[1]) }),
@@ -420,7 +422,8 @@ const GEAR_SORTS = [
 function statChips(e) {
   const out = [];
   if (e.weapon) {
-    out.push(['DMG', e.weapon.baseDamage], ['POT', e.weapon.basePotency], ['SPD', e.weapon.speedModifier]);
+    const sp = speedPct(e.weapon.speedModifier);
+    out.push(['DMG', e.weapon.baseDamage], ['POT', e.weapon.basePotency], ['SPD', `${sp > 0 ? '+' : ''}${sp}%`]);
     const ps = e.weapon.physicalScaling.map((s) => `${s.stat} ${s.value}`).join(' ');
     const ms = e.weapon.magicalScaling.map((s) => `${s.stat} ${s.value}`).join(' ');
     if (ps) out.push(['P.SCALE', ps]);
