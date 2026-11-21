@@ -105,6 +105,9 @@ loadHeroes().then((r) => {
 }).catch((e) => { console.error(e); $('#status').textContent = 'Could not open the legion kept in this browser.'; $('#status').classList.add('err'); });
 
 /* ================= battle ================= */
+/* One field: the game's colosseum, doubled and mirrored into a wide arena. Heroes stand on the scene's ground row
+   (row 48 of 52, as on the game's card): left team P3 P2 P1 facing right, right team P1 P2 P3 facing left. */
+const SLOT_X = { A: { 3: 10, 2: 22.5, 1: 35 }, B: { 1: 65, 2: 77.5, 3: 90 } };
 let battle = null;
 
 $('#btn-fight').addEventListener('click', () => startBattle(teams.A.slice(), teams.B.slice()));
@@ -127,11 +130,10 @@ function startBattle(teamA, teamB) {
   for (const [t, list] of [['A', teamA], ['B', teamB]]) {
     list.forEach((h, i) => fighters.push(makeFighter(h, { team: t, pos: i + 1, weaponSet: getHeroWeaponAnimationSet(h, null), avgLvl, rng })));
   }
-  battle = { seed, rng, avgLvl, fighters, tick: 0, source: { A: teamA, B: teamB }, stopped: false, over: false };
+  battle = { seed, rng, avgLvl, fighters, tick: 0, source: { A: teamA, B: teamB }, stopped: false, over: false, turn: null };
   $('#setup').hidden = true; $('#battle').hidden = false;
   $('#btn-rematch').hidden = true;
   $('#b-eyebrow').textContent = `Level cap ${levelCap} · average level ${avgLvl.toFixed(1)} · seed ${seed}`;
-  $('#b-title').textContent = 'Arena';
   $('#log').replaceChildren();
   log(`Battle starts. Seed ${seed}.`, 'sys');
   fighters.filter((f) => f.luckyStart).forEach((f) => log(`${f.name} starts lucky: triple Initiative.`, 'sys'));
@@ -144,26 +146,27 @@ const enemyOf = (f) => (f.team === 'A' ? 'B' : 'A');
 
 function buildField() {
   const field = $('#field');
-  field.replaceChildren();
-  // left team shows P3 P2 P1 facing right, right team P1 P2 P3 facing left
-  const order = [...teamOf('A').reverse(), ...teamOf('B')];
-  for (const f of order) {
-    const card = el('div', `ft ${f.team.toLowerCase()}`);
+  field.querySelectorAll('.ftr').forEach((n) => n.remove());
+  for (const f of battle.fighters) {
+    const node = el('div', `ftr ${f.team.toLowerCase()}`);
     const canvas = el('canvas');
-    const tgt = el('div', 'tgt');
-    card.append(el('span', 'pos', `P${f.pos}`), canvas, tgt, el('div', 'nm', f.name), el('div', 'hp'), el('div', 'meta'));
-    card.querySelector('.hp').append(el('i'));
-    f.card = card;
-    field.append(card);
+    const tag = el('div', 'tag');
+    tag.append(el('div', 'nm', f.name), el('div', 'hp'), el('div', 'meta'));
+    tag.querySelector('.hp').append(el('i'));
+    const body = el('button', 'body'); body.type = 'button'; body.setAttribute('aria-label', f.name);
+    const chance = el('span', 'chance');
+    node.append(canvas, tag, chance, body);
+    body.addEventListener('click', () => onFighterClick(f));
+    f.node = node;
+    field.append(node);
     const idle = weaponAnimation(f.weaponSet, 'Idle');
-    f.renderer = new HeroRenderer(canvas, f.hero, { animation: idle, mix: 0.12, zoom: 1.05, onEvent: (ev) => { if (ev.name === 'hit' && f.onHit) { const fn = f.onHit; f.onHit = null; fn(); } } });
     f.idle = idle;
+    f.renderer = new HeroRenderer(canvas, f.hero, { animation: idle, mix: 0.12, zoom: 1.12, onEvent: (ev) => { if (ev.name === 'hit' && f.onHit) { const fn = f.onHit; f.onHit = null; fn(); } } });
   }
+  place();
 }
-function relayout() {
-  const field = $('#field');
-  const order = [...teamOf('A').reverse(), ...teamOf('B')];
-  for (const f of order) { f.card.querySelector('.pos').textContent = `P${f.pos}`; field.append(f.card); }
+function place() {
+  for (const f of battle.fighters) f.node.style.left = `${SLOT_X[f.team][f.pos] - 6}%`;
 }
 
 function buildTimebar() {
@@ -178,27 +181,25 @@ function buildTimebar() {
   }
 }
 
-function paint(turnId = null) {
+function paint() {
+  const turnId = battle.turn && battle.turn.id;
   for (const f of battle.fighters) {
     f.marker.style.left = `${Math.min(100, (Math.max(0, f.initiative) / ACT_AT) * 100) * 0.97 + 1}%`;
     f.marker.classList.toggle('down', !f.alive);
     f.marker.classList.toggle('turn', f.id === turnId);
-    f.card.classList.toggle('turn', f.id === turnId);
-    f.card.classList.toggle('down', !f.alive);
-    f.card.querySelector('.hp i').style.width = `${(f.hp / f.hpMax) * 100}%`;
-    f.card.querySelector('.meta').replaceChildren(el('span', null, `${fmt(f.hp)} / ${fmt(f.hpMax)} HP`), el('span', null, `SPD ${f.speed.toFixed(0)}`));
+    f.node.classList.toggle('turn', f.id === turnId);
+    f.node.classList.toggle('down', !f.alive);
+    f.node.querySelector('.hp i').style.width = `${(f.hp / f.hpMax) * 100}%`;
+    f.node.querySelector('.meta').textContent = `${fmt(f.hp)} / ${fmt(f.hpMax)} · P${f.pos}`;
   }
   $('#tick').textContent = `tick ${battle.tick}`;
 }
 
-function log(text, cls) {
-  const li = el('li', cls || null, text);
-  $('#log').prepend(li);
-}
+function log(text, cls) { $('#log').prepend(el('li', cls || null, text)); }
 
 function floatText(f, text, cls) {
   const s = el('span', `float${cls ? ` ${cls}` : ''}`, text);
-  f.card.append(s);
+  f.node.append(s);
   setTimeout(() => s.remove(), 1200);
 }
 
@@ -221,29 +222,46 @@ async function runUntilTurn() {
   }
 }
 
+/* Who the attacker can hit: melee goes to the first standing enemy by itself; ranged lets you choose. */
+const reachable = (f) => targetable(teamOf(enemyOf(f)), { kind: f.weapon.kind, reach: f.weapon.reach });
+
+function clearTargets() {
+  for (const x of battle.fighters) { x.node.classList.remove('can'); x.node.querySelector('.chance').textContent = ''; }
+}
+function showTargets(f) {
+  clearTargets();
+  const opts = f.weapon.kind === 'melee' ? reachable(f).slice(0, 1) : reachable(f);
+  for (const t of opts) {
+    t.node.classList.add('can');
+    t.node.querySelector('.chance').textContent = `${Math.round(basicHitChance(f, t) * 100)}%`;
+  }
+  return opts;
+}
+
+function onFighterClick(t) {
+  const f = battle && battle.turn;
+  if (!f || battle.busy || !t.node.classList.contains('can')) return;
+  doAttack(f, t);
+}
+
 function offerTurn(f) {
   const b = battle;
-  paint(f.id);
+  b.turn = f; b.busy = false;
+  paint();
   $('#who').textContent = f.name;
   $('#who').className = `who ${f.team.toLowerCase()}`;
-  $('#who-facts').textContent = `${f.team === 'A' ? 'Left' : 'Right'} team · P${f.pos} · ${cap(f.hero.class)} · ${f.weapon.name} (${f.weapon.kind}${f.weapon.kind === 'melee' ? `, reach ${f.weapon.reach}` : ''}) · ATK ${f.attack.toFixed(0)} · Initiative ${fmt(f.initiative)}`;
+  $('#who-facts').textContent = `${f.team === 'A' ? 'Left' : 'Right'} team · P${f.pos} · ${cap(f.hero.class)} · ${f.weapon.name} (${f.weapon.kind}) · ATK ${f.attack.toFixed(0)} · Initiative ${fmt(f.initiative)}`;
   const acts = $('#acts');
   acts.replaceChildren();
-  $('#act-hint').textContent = '';
-  const clearTargets = () => b.fighters.forEach((x) => { x.card.classList.remove('can'); x.card.querySelector('.tgt').replaceChildren(); });
+  const opts = showTargets(f);
+  $('#act-hint').textContent = f.weapon.kind === 'melee'
+    ? `Melee: Attack hits ${opts[0] ? opts[0].name : 'the first enemy standing'}. You can also click it.`
+    : 'Ranged: click the enemy you want to hit. The number over each one is the chance to hit.';
 
-  const attack = el('button', 'primary', 'Attack'); attack.type = 'button';
+  const attack = el('button', 'primary', f.weapon.kind === 'melee' ? 'Attack' : 'Attack: click an enemy'); attack.type = 'button';
   attack.addEventListener('click', () => {
-    clearTargets();
-    const options = targetable(teamOf(enemyOf(f)), { kind: f.weapon.kind, reach: f.weapon.reach });
-    $('#act-hint').textContent = `Choose the target: ${f.weapon.kind === 'melee' ? `melee, the first ${f.weapon.reach} standing` : 'ranged, anyone'}. The number is the chance to hit.`;
-    for (const t of options) {
-      const btn = el('button', null, `${Math.round(basicHitChance(f, t) * 100)}%`); btn.type = 'button';
-      btn.title = `Attack ${t.name}`;
-      btn.addEventListener('click', () => { clearTargets(); doAttack(f, t); });
-      t.card.classList.add('can');
-      t.card.querySelector('.tgt').append(btn);
-    }
+    if (f.weapon.kind === 'melee') { const t = reachable(f)[0]; if (t) doAttack(f, t); }
+    else $('#act-hint').textContent = 'Click the enemy you want to hit.';
   });
   acts.append(attack);
 
@@ -253,44 +271,53 @@ function offerTurn(f) {
     if (!other) continue;
     const r = el('button', null, `Move to P${other.pos}`); r.type = 'button';
     r.title = `Swap places with ${other.name}; gives back 250 Initiative`;
-    r.addEventListener('click', () => { clearTargets(); const p = f.pos; f.pos = other.pos; other.pos = p; relayout(); log(`${f.name} moves to P${f.pos}.`); endTurn(f, 'reposition'); });
+    r.addEventListener('click', () => {
+      if (b.busy) return;
+      clearTargets();
+      const p = f.pos; f.pos = other.pos; other.pos = p; place();
+      log(`${f.name} moves to P${f.pos}.`);
+      endTurn(f, 'reposition');
+    });
     acts.append(r);
   }
   const pass = el('button', null, 'Pass'); pass.type = 'button';
   pass.title = 'Gives back 400 Initiative';
-  pass.addEventListener('click', () => { clearTargets(); log(`${f.name} passes.`); endTurn(f, 'pass'); });
+  pass.addEventListener('click', () => { if (b.busy) return; clearTargets(); log(`${f.name} passes.`); endTurn(f, 'pass'); });
   acts.append(pass);
 }
 
 async function doAttack(f, t) {
   const b = battle;
+  if (b.busy) return;
+  b.busy = true;
+  clearTargets();
   $('#acts').replaceChildren();
   $('#act-hint').textContent = '';
   const res = basicAttack(f, t, b.rng, b.avgLvl);
+  const parts = [`${f.name} → ${t.name}`, `${Math.round(res.chance * 100)}%`];
+  if (!res.hit) parts.push('miss');
+  else { parts.push(`${res.damage} damage`); if (res.crit) parts.push('critical'); if (res.blocked) parts.push('blocked'); }
+  log(parts.join(' · '), res.hit ? 'hit' : null);
   const anim = weaponAnimation(f.weaponSet, 'Hit');
   const dur = (f.renderer.animations.includes(anim) && f.renderer.duration(anim)) || 1.5;
   let landed = false;
   const land = () => {
-    if (landed) return; landed = true;
-    if (!res.hit) { floatText(t, 'MISS', 'miss'); }
+    if (landed || b.stopped) return; landed = true;
+    if (!res.hit) floatText(t, 'MISS', 'miss');
     else {
       floatText(t, `${res.damage}${res.crit ? '!' : ''}`, res.crit ? 'crit' : null);
       play(t, res.ko ? HERO_ANIMATIONS.down : HERO_ANIMATIONS.hurt, false);
-      if (!res.ko) setTimeout(() => t.alive && play(t, t.idle, true), 700);
+      if (!res.ko) setTimeout(() => t.alive && !b.stopped && play(t, t.idle, true), 700);
     }
-    paint(f.id);
+    paint();
+    if (res.ko) log(`${t.name} is down.`, 'ko');
   };
   f.onHit = land;
   play(f, anim, false);
-  const parts = [`${f.name} → ${t.name}`, `${Math.round(res.chance * 100)}%`];
-  if (!res.hit) parts.push('miss');
-  else { parts.push(`${res.damage} damage`); if (res.crit) parts.push('critical'); if (res.blocked) parts.push('blocked'); }
   setTimeout(land, dur * 700); // if the animation carries no hit marker
   await sleep(dur * 1000);
   if (b.stopped) return;
   land();
-  log(parts.join(' · '), res.hit ? 'hit' : null);
-  if (res.ko) log(`${t.name} is down.`, 'ko');
   play(f, f.idle, true);
   endTurn(f, 'action');
 }
@@ -298,6 +325,7 @@ async function doAttack(f, t) {
 function endTurn(f, kind) {
   const b = battle;
   spendTurn(f, kind);
+  b.turn = null;
   const w = winner();
   if (w) {
     b.over = true;
@@ -306,6 +334,7 @@ function endTurn(f, kind) {
     $('#who').className = `who result ${w.toLowerCase()}`;
     $('#who-facts').textContent = `After ${b.tick} ticks.`;
     $('#acts').replaceChildren();
+    $('#act-hint').textContent = '';
     $('#btn-rematch').hidden = false;
     log(`${w === 'A' ? 'Left' : 'Right'} team wins after ${b.tick} ticks.`, 'ko');
     teamOf(w).filter((x) => x.alive).forEach((x) => play(x, weaponAnimation(x.weaponSet, 'Celebrate'), true));
