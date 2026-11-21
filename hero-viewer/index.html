@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hero Viewer · DFK Tales</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/tales.css?v=12">
+<style>
+/* One hero, live: the game's rig on the left, the game's card on the right. Black field, one red, rarity colors only for rarity. */
+.topbar .load { margin-left: auto; display: flex; gap: 6px; align-items: center; flex: 0 1 460px; min-width: 0; padding-left: 16px; }
+.topbar .load input { flex: 1 1 240px; min-width: 110px; height: 34px; padding: 0 10px; font: 12.5px var(--mono); }
+.topbar .load button { height: 34px; padding: 0 14px; white-space: nowrap; }
+
+.hv { max-width: 1180px; margin: 0 auto; padding: 24px clamp(16px, 2.5vw, 32px) 56px; display: grid; gap: 22px; }
+.head { display: grid; gap: 8px; }
+.head h1 { font: 700 clamp(32px, 5vw, 56px)/0.95 var(--display); text-transform: uppercase; letter-spacing: .02em; margin: 2px 0 4px; text-wrap: balance; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag { font: 600 11px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; padding: 6px 9px; border: 1px solid var(--line-2); background: var(--panel); white-space: nowrap; }
+.tag.mono { font: 12px/1 var(--mono); letter-spacing: 0; text-transform: none; }
+.tag.r-common { color: var(--r-common); border-color: var(--r-common); }
+.tag.r-uncommon { color: var(--r-uncommon); border-color: var(--r-uncommon); }
+.tag.r-rare { color: var(--r-rare); border-color: var(--r-rare); }
+.tag.r-legendary { color: var(--r-legendary); border-color: var(--r-legendary); }
+.tag.r-mythic { color: var(--r-mythic); border-color: var(--r-mythic); }
+.tag.dark { color: var(--text); border-color: var(--red); background: var(--red-dim); }
+.status { font: 12.5px var(--mono); color: var(--muted); }
+.status:empty { display: none; }
+.status.err { color: var(--red); }
+
+.grid { display: grid; gap: 22px; grid-template-columns: minmax(0, 1fr) 300px; align-items: start; }
+.grid[hidden] { display: none; }
+@media (max-width: 900px) { .grid { grid-template-columns: 1fr; } .side { justify-self: center; } }
+
+.panel { background: var(--panel); border: 1px solid var(--line); padding: 16px; display: grid; gap: 16px; }
+
+/* The game's 55x52 pixel-art scenes, scaled up crisp. The rig canvas sits between the scene and its front layer;
+   it is shifted up so the rig's ground line (93% of its height) lands on the path, at 84.5% of the stage. */
+.stage { position: relative; width: 100%; max-width: 600px; margin: 0 auto; aspect-ratio: 55 / 52; overflow: hidden; background: #0a0a0a; border: 1px solid var(--line-2); }
+.stage .bg, .stage .front { position: absolute; inset: 0; background: center / 100% 100% no-repeat; image-rendering: pixelated; }
+.stage .front { pointer-events: none; }
+.stage canvas { position: absolute; left: 0; top: -8.5%; width: 100%; height: 100%; display: block; }
+.stage canvas.mirror { transform: scaleX(-1); }
+.stage::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; box-shadow: inset 0 0 0 3px var(--red), inset 0 0 80px rgba(227, 23, 43, .45); }
+.stage.flash::after { animation: flash .4s ease-out; }
+@keyframes flash { 0% { opacity: 1; } 100% { opacity: 0; } }
+.stage .note { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); background: rgba(0, 0, 0, .82); border: 1px solid var(--line-2); padding: 6px 12px; font: 12px var(--mono); white-space: nowrap; }
+.stage .note[hidden] { display: none; }
+
+.now { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; font: 12px var(--mono); color: var(--muted); }
+.now strong { color: var(--text); font-weight: 600; }
+.now .time { margin-left: 8px; }
+.transport { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.transport button { padding: 7px 10px; font-size: 11px; }
+.sep { width: 1px; height: 22px; background: var(--line-2); margin: 0 4px; }
+
+.group { display: grid; gap: 8px; }
+.group h2 { font: 600 11px var(--display); letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin: 0; }
+.group p { margin: 0; font-size: 12.5px; color: var(--muted); max-width: 70ch; }
+.group p b { color: var(--text); font-weight: 500; }
+.row { display: flex; flex-wrap: wrap; gap: 4px; }
+.row button { padding: 8px 11px; font-size: 11px; }
+button[aria-pressed="true"] { background: var(--text); border-color: var(--text); color: #000; }
+button.act:hover { border-color: var(--red); }
+button.act.is-on { background: var(--red); border-color: var(--red); color: #fff; }
+button.is-home::after { content: ""; width: 6px; height: 6px; background: var(--red); transform: rotate(45deg); margin-left: 2px; }
+button.is-home[aria-pressed="true"]::after { background: #000; }
+
+.log { list-style: none; margin: 0; padding: 0; font: 12px var(--mono); color: var(--muted); display: grid; gap: 2px; min-height: 18px; }
+.log li.is-hit { color: var(--red); font-weight: 600; }
+.log li.is-move { color: var(--text); }
+
+.side { display: grid; gap: 12px; width: 300px; }
+.card { position: relative; width: 300px; height: 430px; cursor: pointer; }
+.card:focus-visible { outline: 1px solid var(--red); outline-offset: 3px; }
+.card .badge { position: absolute; left: 235px; top: 13px; width: 56px; height: 56px; pointer-events: none; z-index: 5; }
+.card:not([data-page="front"]) .badge, .card .badge[hidden] { display: none; }
+.pages { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.pages button { padding: 7px 4px; font-size: 10.5px; letter-spacing: .08em; justify-content: center; }
+.hs { display: flex; justify-content: space-between; gap: 8px; font: 11px var(--mono); color: var(--muted); background: var(--panel); border: 1px solid var(--line); padding: 7px 10px; }
+.hs b { color: var(--text); font-weight: 600; }
+.hs .x b { color: var(--red); }
+
+.box { border: 1px solid var(--line); background: var(--panel); padding: 12px; display: grid; gap: 10px; }
+.box h2 { font: 600 11px var(--display); letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin: 0; }
+.box p { margin: 0; font-size: 12.5px; color: var(--muted); }
+.box p b { color: var(--text); font-weight: 500; }
+.box.dark { border-color: var(--red-dim); border-left: 2px solid var(--red); }
+.box.dark h2 { color: var(--text); }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.stat { border: 1px solid var(--line-2); padding: 5px 7px; display: grid; gap: 1px; }
+.stat span { font: 600 10px var(--display); letter-spacing: .14em; color: var(--muted); }
+.stat b { font: 600 16px var(--mono); }
+.stat.hi { border-color: var(--red); }
+.stat.hi b { color: var(--red); }
+dl.facts { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 12.5px; }
+dl.facts dt { font: 600 10.5px/1.9 var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+dl.facts dd { margin: 0; text-align: right; font-family: var(--mono); font-size: 12px; }
+dl.facts dd .tier { color: var(--red); font-size: 10.5px; margin-left: 3px; }
+.parent { display: grid; gap: 2px; text-decoration: none; padding: 8px 0 0; border-top: 1px solid var(--line); }
+.parent:first-of-type { border-top: 0; padding-top: 0; }
+.parent b { font: 600 13px var(--display); letter-spacing: .06em; text-transform: uppercase; }
+.parent span { font: 11.5px var(--mono); color: var(--muted); }
+a.parent:hover b { color: var(--red); }
+
+footer { font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 14px; display: grid; gap: 4px; max-width: 90ch; }
+footer p { margin: 0; }
+
+@media (max-width: 700px) {
+  .topbar .load { flex: 1 1 100%; padding-left: 0; margin-left: 0; }
+  .hv { padding-top: 18px; }
+}
+@media (prefers-reduced-motion: reduce) { .stage.flash::after { animation: none; } }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../">DFK Tales</a>
+  <nav class="nav" aria-label="Pages">
+    <a href="../legion-viewer/">Legion Viewer</a>
+    <a href="./" aria-current="page">Hero Viewer</a>
+  </nav>
+  <form class="load" id="form">
+    <input id="hero-id" type="text" inputmode="numeric" placeholder="Hero ID, e.g. 1000000523445" autocomplete="off" spellcheck="false" aria-label="Hero ID">
+    <button type="submit" class="primary" id="btn-load">Load hero</button>
+  </form>
+</header>
+
+<main class="hv">
+  <section class="head" aria-live="polite">
+    <div class="eyebrow" id="eyebrow">Hero Viewer</div>
+    <h1 id="name">Loading…</h1>
+    <div class="tags" id="tags"></div>
+    <div class="status" id="status"></div>
+  </section>
+
+  <div class="grid" id="grid" hidden>
+    <section class="panel" aria-label="Animations">
+      <div class="stage" id="stage">
+        <div class="bg" id="scene-bg"></div>
+        <canvas id="stage-canvas" role="img" aria-label="The hero, animated with the game's rig"></canvas>
+        <div class="front" id="scene-front" aria-hidden="true"></div>
+        <div class="note" id="note" role="status">Loading the rig…</div>
+      </div>
+
+      <div class="now">
+        <div>Now playing <strong id="now-name">–</strong><span class="time" id="now-time"></span></div>
+        <div class="transport">
+          <button type="button" id="btn-prev" aria-label="Previous frame" disabled>‹</button>
+          <button type="button" id="btn-pause" aria-pressed="false">Pause</button>
+          <button type="button" id="btn-next" aria-label="Next frame" disabled>›</button>
+          <span class="sep" aria-hidden="true"></span>
+          <button type="button" data-speed="0.25" aria-pressed="false">0.25×</button>
+          <button type="button" data-speed="0.5" aria-pressed="false">0.5×</button>
+          <button type="button" data-speed="1" aria-pressed="true">1×</button>
+          <span class="sep" aria-hidden="true"></span>
+          <button type="button" id="btn-mirror" aria-pressed="false">Mirror</button>
+        </div>
+      </div>
+
+      <div class="group">
+        <h2 id="actions-title">Actions</h2>
+        <div class="row" id="actions"></div>
+      </div>
+      <div class="group" id="class-group" hidden>
+        <h2>Class skills</h2>
+        <div class="row" id="class-actions"></div>
+      </div>
+      <div class="group">
+        <h2>Loop poses</h2>
+        <div class="row" id="poses"></div>
+      </div>
+      <div class="group">
+        <h2>Scene</h2>
+        <div class="row" id="scenes"></div>
+      </div>
+      <div class="group">
+        <h2>Signals inside the animation</h2>
+        <p>Every animation carries its own markers: <b>hit</b> is the frame where combat applies the blow, <b>move</b> is where the step starts, <b>SFX</b> are the sounds the game played.</p>
+        <ul class="log" id="event-log" aria-live="polite"></ul>
+      </div>
+    </section>
+
+    <aside class="side" aria-label="Card and facts">
+      <div class="card" id="card" data-page="front" role="button" tabindex="0" aria-label="Hero card: click to turn the page">
+        <img class="badge" id="badge" src="badge-dark-summon.png" alt="Dark summon" width="56" height="56" hidden>
+      </div>
+      <div class="pages" role="group" aria-label="Card pages">
+        <button type="button" data-page="front" aria-pressed="true">Front</button>
+        <button type="button" data-page="stats" aria-pressed="false">Stats</button>
+        <button type="button" data-page="growth" aria-pressed="false">Growth</button>
+        <button type="button" data-page="genes" aria-pressed="false">Genes</button>
+        <button type="button" data-page="recessiveGenes" aria-pressed="false">R1–R3</button>
+        <button type="button" data-page="recessiveVisualGenes" aria-pressed="false">R visual</button>
+        <button type="button" data-page="history" aria-pressed="false">History</button>
+      </div>
+      <div class="hs" id="hs"></div>
+      <div class="box">
+        <h2>Stats</h2>
+        <div class="stats" id="stats"></div>
+        <dl class="facts" id="facts"></dl>
+      </div>
+      <div class="box dark" id="dark" hidden></div>
+      <div class="box" id="parents" hidden></div>
+    </aside>
+  </div>
+
+  <footer>
+    <p>Drawn live in your browser with @defikingdoms/game-sdk 0.1.0: the game's rig and animations, colors and hair from the hero's visual genes, weapon and shield from its gear. Data read from the chain on every load.</p>
+    <p>No flying arrows, spell effects or sounds: the SDK only carries the hero. Read-only: nothing here asks for a signature, a transaction or an approval.</p>
+  </footer>
+</main>
+<script type="module" src="app.js?v=1"></script>
+</body>
+</html>

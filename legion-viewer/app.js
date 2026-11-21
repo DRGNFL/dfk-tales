@@ -4,6 +4,7 @@ import {
   FEMALE_HAIR_STYLES, MALE_HAIR_STYLES, getClassTier, getDisplayHeroId, resolveAssetUrl, PetRenderer, createHeroCard,
 } from 'https://esm.sh/@defikingdoms/game-sdk@0.1.0?deps=ethers@5.8.0';
 import { createAnimatedHeroCard } from 'https://esm.sh/@defikingdoms/game-sdk@0.1.0/renderer?deps=ethers@5.8.0';
+import { traitScore, heroScore, heroMult, heroScoreX, clearHeroScores } from '../assets/heroscore.js?v=1';
 
 /* ================= vocab ================= */
 const RARITY = ['common', 'uncommon', 'rare', 'legendary', 'mythic'];
@@ -42,30 +43,9 @@ let scope = 'd';
 const genes = (raw) => (scope === 'd' ? [raw.d] : [...new Set([raw.d, raw.r1, raw.r2, raw.r3])]);
 const sg = (k) => (h) => genes(h.statGenes.raw[k]);
 const vg = (k) => (h) => genes(h.visualGenes.raw[k]);
-const traitScore = (h) => ['active1', 'active2', 'passive1', 'passive2'].reduce((t, k) => t + tierOf(h.statGenes.raw[k].d), 0);
 const statSum = (h) => STATS.reduce((t, [k]) => t + h.stats[k], 0);
 
-/* Hero Score from the Hero Transcendence & Divine Essence deck (burn multiplier left at 1).
-   Heroscore X = Heroscore × (1 + trait counter): Hubert's Heroscore + Trait Multiplier, Ge's rule. */
-const RANK = { basic: 0, advanced: 1, elite: 2, exalted: 3, transcendent: 4 };
-const C_BASE = [150, 3000, 9000, 25000, 75000];
-const S_BASE = [150, 450, 1400, 10000, 30000];
-const R_BASE = { common: 0, uncommon: 1000, rare: 3000, legendary: 8000, mythic: 16000 };
-const levelScore = (l) => (l <= 5 ? l + 1 : l <= 8 ? 2 * (l - 6) + 8 : l <= 15 ? 4 * (l - 9) + 16 : l <= 35 ? 5 * (l - 16) + 45 : l <= 55 ? 7.5 * (l - 36) + 147.5 : 10 * (l - 56) + 300);
-const hsMemo = new Map();
-function heroScore(h) {
-  if (hsMemo.has(h.id)) return hsMemo.get(h.id);
-  const c = RANK[getClassTier(h.statGenes.raw.class.d)] || 0;
-  const s = RANK[getClassTier(h.statGenes.raw.subClass.d)] || 0;
-  const classScore = C_BASE[c] + 0.25 * C_BASE[s];
-  const rarityScore = (R_BASE[h.rarity] || 0) * (1 + c + 0.25 * (1 + s));
-  const summonScore = 0.005 * h.summonsRemaining * (100 + h.level) * (S_BASE[c] + 0.25 * S_BASE[s]);
-  const base = classScore + rarityScore + summonScore;
-  const v = (0.01 + 0.00007 * h.level) * (base * levelScore(h.level)) + base;
-  hsMemo.set(h.id, v);
-  return v;
-}
-const heroScoreX = (h) => heroScore(h) * (1 + traitScore(h));
+/* Heroscore, ×multiplier and Heroscore X live in ../assets/heroscore.js, shared with the Hero Viewer. */
 const fmtInt = (n) => Math.round(n).toLocaleString('en-US');
 const compact = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e7 ? 1 : 2)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(n >= 1e5 ? 0 : 1)}k` : String(Math.round(n)));
 
@@ -93,7 +73,7 @@ const yesNo = (yes, no) => (v) => (v === 'yes' ? yes : no);
 /* ================= HEROES ================= */
 const HERO_TABS = [
   { id: 'basics', label: 'Basics', groups: [
-    range('hsx', 'Heroscore X', heroScoreX, { hint: "Hubert's Heroscore × (1 + trait counter)" }),
+    range('hsx', 'Heroscore X', heroScoreX, { hint: "Hubert's Heroscore × (1 + trait counter), Gen 0 ×3" }),
     range('hs', 'Heroscore', heroScore),
     geneSet('class', 'Class', sg('class'), (r) => className(HERO_CLASSES[r]) || `#${r}`, { tag: (r) => TIER_TAG[tierOf(r)] }),
     geneSet('subClass', 'Subclass', sg('subClass'), (r) => className(HERO_CLASSES[r]) || `#${r}`, { tag: (r) => TIER_TAG[tierOf(r)] }),
@@ -176,10 +156,9 @@ const HEROES = {
     const h = entry.item;
     const go = (gear) => {
       entry.handle = createAnimatedHeroCard(h, { renderer: gear ? { gear } : {} });
-      const t = traitScore(h);
       const strip = el('div', 'hs');
       const a = el('span'); a.append('HEROSCORE ', el('b', null, fmtInt(heroScore(h))));
-      const b = el('span', 'x'); b.append(`×${1 + t} · HSX `, el('b', null, fmtInt(heroScoreX(h))));
+      const b = el('span', 'x'); b.append(`×${heroMult(h)} · HSX `, el('b', null, fmtInt(heroScoreX(h))));
       strip.append(a, b);
       entry.slot.replaceChildren(entry.handle.element, strip);
       entry.slot.classList.add('live');
@@ -841,7 +820,7 @@ async function load() {
   const my = ++run;
   owner = addr; chainName = $('#chain').selectedOptions[0].textContent;
   client = createDFKClient({ chainId });
-  heroById.clear(); gearByKey.clear(); hsMemo.clear(); tokens = [];
+  heroById.clear(); gearByKey.clear(); clearHeroScores(); tokens = [];
   for (const sec of Object.values(SECTIONS)) { resetSection(sec); sec.state = 'loading'; }
   $('#void').hidden = true; $('#headline').hidden = false;
   renderSecTabs(); renderHeadline(); buildSidebar(); renderGrid();
