@@ -36,12 +36,13 @@
 
 .panel { background: var(--panel); border: 1px solid var(--line); padding: 16px; display: grid; gap: 16px; }
 
-/* The game's 55x52 pixel-art scenes, scaled up crisp. The rig canvas sits between the scene and its front layer;
-   it is shifted up so the rig's ground line (93% of its height) lands on the path, at 84.5% of the stage. */
+/* The game's 55x52 pixel-art scenes, scaled up crisp. The rig canvas sits between the scene and its front layer.
+   The rig stands at 93% of its canvas; the card puts that on row 48 of the 52-row scene (Arctic's grey ledge,
+   the Fishing dock), so the canvas is nudged to 48/52 = 92.31%. */
 .stage { position: relative; width: 100%; max-width: 600px; margin: 0 auto; aspect-ratio: 55 / 52; overflow: hidden; background: #0a0a0a; border: 1px solid var(--line-2); }
 .stage .bg, .stage .front { position: absolute; inset: 0; background: center / 100% 100% no-repeat; image-rendering: pixelated; }
 .stage .front { pointer-events: none; }
-.stage canvas { position: absolute; left: 0; top: -8.5%; width: 100%; height: 100%; display: block; }
+.stage canvas { position: absolute; left: 0; top: -0.6923%; width: 100%; height: 100%; display: block; }
 .stage canvas.mirror { transform: scaleX(-1); }
 .stage::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; box-shadow: inset 0 0 0 3px var(--red), inset 0 0 80px rgba(227, 23, 43, .45); }
 .stage.flash::after { animation: flash .4s ease-out; }

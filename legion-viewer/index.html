@@ -120,6 +120,10 @@ button.icon { padding: 0; width: 34px; justify-content: center; font: 400 18px/1
 .grid.pet { grid-template-columns: repeat(auto-fill, 220px); gap: 16px; }
 .grid.pet .slot { width: 220px; height: 372px; }
 .is-pet .dfk-heroFrame::before { display: none !important; }
+/* Pets have a one-line family label, so the rarity gem sets the row height and the bonus rows moved with it
+   (legendary gem 29 px, mythic 33 px). Pin the gem box to the 35 px of a hero's two-line class label:
+   every pet card then puts the three bonus rows where hero cards put theirs, centred in the box. */
+.is-pet .dfk-heroInfo .dfk-cardRarity { height: 35px; display: flex; align-items: center; justify-content: center; }
 .pcard { width: 220px; height: 372px; background: var(--panel); border: 1px solid var(--line); border-top: 3px solid var(--rc); display: grid; grid-template-rows: auto 1fr; }
 .pstage { position: relative; height: 180px; display: grid; place-items: center; background: #050505; border-bottom: 1px solid var(--line); }
 .pstage canvas { width: 180px; height: 180px; image-rendering: pixelated; }
