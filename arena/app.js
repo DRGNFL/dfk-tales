@@ -829,12 +829,12 @@ function renderHand(f, live) {
     const t = tile(f.team === 'A' ? (d < 0 ? 'right' : 'left') : (d < 0 ? 'left' : 'right'));
     if (!other || C.has(f, 'root')) t.classList.add('off');
     tipOn(t, () => showTip(t, other ? `Move to P${other.pos}` : 'Move', other ? `Swap places with ${other.name}` : 'Nobody there', 'Gives back 250 Initiative.', C.has(f, 'root') ? 'Rooted' : null));
-    t.addEventListener('click', () => { if (!ok(t) || !other) return; b.busy = true; b.live = null; hideTip(); clearTargets(); lockHand(); showEvents(C.reposition(b, f, other)); place(); finishAction(f, 'reposition'); });
+    t.addEventListener('click', () => { if (!ok(t) || !other) return; b.busy = true; b.live = null; hideTip(); clearTargets(); lockHand(f); showEvents(C.reposition(b, f, other)); place(); finishAction(f, 'reposition'); });
     A.append(t);
   }
   const pass = tile('pass');
   tipOn(pass, () => showTip(pass, 'Pass', null, 'Gives back 400 Initiative.'));
-  pass.addEventListener('click', () => { if (!ok(pass)) return; b.busy = true; b.live = null; hideTip(); clearTargets(); lockHand(); log(`${f.name} passes.`, 'hit', f.team); finishAction(f, 'pass'); });
+  pass.addEventListener('click', () => { if (!ok(pass)) return; b.busy = true; b.live = null; hideTip(); clearTargets(); lockHand(f); log(`${f.name} passes.`, 'hit', f.team); finishAction(f, 'pass'); });
   A.append(pass);
   for (const s of f.traitActives) A.append(actTile(f, s, live, 'trait'));
   if (f.petSkill) A.append(actTile(f, f.petSkill, live, 'pet'));
@@ -930,7 +930,7 @@ function onFighterClick(t) {
 async function doAttack(f, t) {
   const b = battle;
   if (b.busy) return;
-  b.busy = true; b.live = null; hideTip(); clearTargets(); lockHand();
+  b.busy = true; b.live = null; hideTip(); clearTargets(); lockHand(f);
   turnLine(f, f.team === 'A' ? 'Basic Attack' : null);
   const events = C.basicAttack(b, f, t);
   await animate(f, events, animFor(f, null));
@@ -940,17 +940,18 @@ async function doAttack(f, t) {
 async function doSkill(f, s, t) {
   const b = battle;
   if (b.busy) return;
-  b.busy = true; b.live = null; hideTip(); clearTargets(); lockHand();
+  b.busy = true; b.live = null; hideTip(); clearTargets(); lockHand(f);
   turnLine(f, f.team === 'A' ? s.name : null);
   const events = C.useSkill(b, f, s, t);
   await animate(f, events, animFor(f, s, s.channel ? 'channel' : null));
   if (b.stopped) return;
   finishAction(f, 'action', s);
 }
-function lockHand() {
+/* While a hero acts nothing on the bar answers; if the bar shows that hero, it says so. */
+function lockHand(f) {
   $('#groups').classList.add('locked');
   const em = $('#handline em');
-  if (em) { em.className = ''; em.textContent = 'acting'; }
+  if (em && f && f.id === handId) { em.className = ''; em.textContent = 'acting'; }
 }
 async function finishAction(f, kind, s = null) {
   const b = battle;
