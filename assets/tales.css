@@ -21,19 +21,19 @@ body { font-family: var(--body); font-size: 14px; line-height: 1.5; }
 a { color: inherit; }
 
 .topbar {
-  position: sticky; top: 0; z-index: 20; background: rgba(0, 0, 0, .92); backdrop-filter: blur(6px);
+  position: sticky; top: 0; z-index: 20; background: #000;
   border-bottom: 1px solid var(--line); display: flex; align-items: stretch; gap: 0; height: 52px; padding: 0 16px;
 }
 .brand {
   font-family: var(--display); font-weight: 700; font-size: 18px; letter-spacing: .14em; text-transform: uppercase;
-  text-decoration: none; display: flex; align-items: center; gap: 10px; padding-right: 22px; margin-right: 6px;
+  text-decoration: none; display: flex; align-items: center; gap: 10px; padding-right: 22px; margin-right: 6px; white-space: nowrap; flex-shrink: 0;
   border-right: 1px solid var(--line);
 }
 .brand::before { content: ""; width: 10px; height: 10px; background: var(--red); transform: rotate(45deg); }
-.nav { display: flex; align-items: stretch; }
+.nav { display: flex; align-items: stretch; flex-shrink: 0; }
 .nav a {
   font-family: var(--display); font-size: 13px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase;
-  text-decoration: none; color: var(--muted); display: flex; align-items: center; padding: 0 16px; border-bottom: 2px solid transparent;
+  text-decoration: none; color: var(--muted); display: flex; align-items: center; padding: 0 16px; border-bottom: 2px solid transparent; white-space: nowrap;
 }
 .nav a:hover { color: var(--text); }
 .nav a[aria-current="page"] { color: var(--text); border-bottom-color: var(--red); }

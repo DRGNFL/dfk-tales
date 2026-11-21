@@ -666,6 +666,7 @@ function syncHeader() {
   const sec = S();
   const n = sec.state === 'ready' ? activeCount(sec) : 0;
   $('#active-n').hidden = n === 0; $('#active-n').textContent = n;
+  $('#rail-n').hidden = n === 0; $('#rail-n').textContent = n;
   $('#btn-reset').disabled = n === 0;
 }
 
@@ -898,6 +899,17 @@ document.querySelectorAll('[data-scope]').forEach((b) => b.addEventListener('cli
 }));
 document.querySelectorAll('#sections [data-sec]').forEach((b) => b.addEventListener('click', () => show(b.dataset.sec)));
 $('#btn-filters').addEventListener('click', () => $('#side').classList.toggle('open'));
+// Filters fold into a thin rail on the left; on phones the same button closes the drawer.
+const narrow = window.matchMedia('(max-width: 900px)');
+function setSide(open) {
+  $('.lv').classList.toggle('collapsed', !open);
+  store.set('dfk-tales:side', open ? 'open' : 'closed');
+}
+$('#btn-hide').addEventListener('click', () => { if (narrow.matches) $('#side').classList.remove('open'); else setSide(false); });
+$('#btn-rail').addEventListener('click', () => setSide(true));
+if (store.get('dfk-tales:side') === 'closed') $('.lv').classList.add('collapsed');
+// The bar on top wraps to two rows on phones: keep the sticky sidebar just under it.
+new ResizeObserver(([e]) => document.documentElement.style.setProperty('--top', `${Math.round(e.target.getBoundingClientRect().height)}px`)).observe($('.topbar'));
 document.querySelectorAll('[data-petview]').forEach((b) => b.addEventListener('click', () => {
   if (petView === b.dataset.petview) return;
   petView = b.dataset.petview; store.set('dfk-tales:petView', petView);
@@ -927,4 +939,4 @@ const lastChain = store.get('dfk-tales:chain');
 if (lastChain && [...$('#chain').options].some((o) => o.value === lastChain)) $('#chain').value = lastChain;
 const fromHash = location.hash.slice(1);
 show(SECTIONS[fromHash] ? fromHash : 'heroes', { keepHash: true });
-setStatus(lastAddr ? 'Last wallet is filled in. Press Load legion.' : 'Paste a wallet address to begin.');
+setStatus(lastAddr ? 'Last wallet is filled in. Press Load legion, top right.' : 'Paste a wallet address in the bar at the top to begin.');

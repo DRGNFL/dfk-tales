@@ -7,14 +7,15 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500&family=JetBrains+Mono:wght@400;600&display=swap">
-<link rel="stylesheet" href="../assets/tales.css?v=10">
+<link rel="stylesheet" href="../assets/tales.css?v=11">
 <style>
 /* Filters pinned left, the legion on the right. Black field, one red for state, rarity colors only for rarity. */
-.lv { display: grid; grid-template-columns: 320px minmax(0, 1fr); min-height: calc(100vh - 52px); }
+.lv { display: grid; grid-template-columns: 320px minmax(0, 1fr); min-height: calc(100vh - var(--top, 52px)); transition: grid-template-columns .16s ease-out; }
+
 
 /* ---------- sidebar ---------- */
 .side {
-  position: sticky; top: 52px; height: calc(100vh - 52px); overflow-y: auto; border-right: 1px solid var(--line);
+  position: sticky; top: var(--top, 52px); height: calc(100vh - var(--top, 52px)); overflow-y: auto; border-right: 1px solid var(--line);
   background: var(--panel); display: flex; flex-direction: column;
 }
 .side-head { padding: 14px 16px 12px; border-bottom: 1px solid var(--line); display: grid; gap: 12px; position: sticky; top: 0; background: var(--panel); z-index: 2; }
@@ -22,6 +23,21 @@
 .side-title h2 { font: 700 15px var(--display); letter-spacing: .16em; text-transform: uppercase; margin: 0; display: flex; gap: 8px; align-items: center; }
 .side-title h2 b { font: 600 11px var(--mono); background: var(--red); color: #fff; padding: 2px 6px; }
 .side-title h2 b[hidden] { display: none; }
+.side-actions { display: flex; gap: 6px; }
+button.icon { padding: 0; width: 34px; justify-content: center; font: 400 18px/1 var(--mono); letter-spacing: 0; }
+.rail { display: none; }
+@media (min-width: 901px) {
+  .lv.collapsed { grid-template-columns: 40px minmax(0, 1fr); }
+  .lv.collapsed .side { overflow: hidden; }
+  .lv.collapsed .side > :not(.rail) { display: none; }
+  .lv.collapsed .main { padding-left: 24px; padding-right: 24px; }
+}
+.lv.collapsed .rail { display: flex; flex-direction: column; align-items: center; gap: 14px; width: 100%; height: 100%; padding: 14px 0; border: 0; background: transparent; color: var(--muted); }
+.rail:hover { color: var(--text); background: var(--panel-2); }
+.rail span { font: 400 18px/1 var(--mono); }
+.rail em { font-style: normal; writing-mode: vertical-rl; letter-spacing: .22em; font-size: 12px; }
+.rail b { font: 600 11px var(--mono); background: var(--red); color: #fff; padding: 2px 5px; }
+.rail b[hidden] { display: none; }
 .seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line-2); }
 .seg button { border: 0; padding: 8px 6px; font-size: 11px; background: transparent; color: var(--muted); }
 .seg button[aria-pressed="true"] { background: var(--text); color: #000; }
@@ -63,14 +79,17 @@
 
 /* ---------- main ---------- */
 .main { min-width: 0; padding: 22px clamp(16px, 2.5vw, 32px) 60px; display: grid; gap: 22px; align-content: start; }
-.load { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; }
-.load input { flex: 1 1 360px; min-width: 0; font-family: var(--mono); font-size: 13px; }
-.safe { margin: -12px 0 0; font-size: 12px; color: var(--muted); }
+.topbar .load { margin-left: auto; display: flex; gap: 6px; align-items: center; flex: 0 1 760px; min-width: 0; padding-left: 16px; }
+.topbar .load input { flex: 1 1 380px; min-width: 120px; height: 34px; padding: 0 10px; font: 12.5px var(--mono); }
+.topbar .load select { height: 34px; padding: 0 8px; font-size: 12.5px; }
+.topbar .load button { height: 34px; padding: 0 14px; white-space: nowrap; }
+.void .safe { font-size: 12.5px; }
 .status { font: 12.5px var(--mono); color: var(--muted); }
 .status:empty { display: none; }
 .status.err { color: var(--red); }
 
 .headline { display: grid; gap: 14px; }
+.headline .sections { margin-top: 8px; }
 .headline[hidden] { display: none; }
 .headline h1 { font: 700 clamp(34px, 5vw, 58px)/0.95 var(--display); text-transform: uppercase; letter-spacing: .02em; margin: 4px 0 0; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
 .headline h1 .tot { color: var(--red); font-family: var(--mono); font-size: .62em; }
@@ -93,6 +112,7 @@
 .pscore b { color: var(--red); font-weight: 600; }
 
 /* pets */
+.grid.hero { column-gap: 16px; }
 .grid.hero .slot { height: 458px; }
 .hs { width: 300px; box-sizing: border-box; display: flex; justify-content: space-between; gap: 8px; font: 11px var(--mono); color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-top: 0; padding: 6px 10px; margin-top: -2px; }
 .hs b { color: var(--text); font-weight: 600; }
@@ -175,7 +195,16 @@
 
 @media (max-width: 900px) {
   .lv { grid-template-columns: 1fr; }
-  .side { position: fixed; z-index: 30; top: 52px; left: 0; bottom: 0; width: min(340px, 92vw); height: auto; transform: translateX(-102%); transition: transform .18s ease-out; }
+  .lv.collapsed .rail { display: none; }
+  .headline h1 .score { margin-left: 0; padding-left: 0; border-left: 0; }
+  .sections { flex-wrap: nowrap; overflow-x: auto; }
+  .sections button { padding: 12px 10px 11px; white-space: nowrap; }
+  .topbar { flex-wrap: wrap; height: auto; padding-bottom: 10px; }
+  .topbar .brand, .topbar .nav { height: 52px; }
+  .topbar .load { flex: 1 1 100%; flex-wrap: wrap; padding-left: 0; margin-left: 0; }
+  .topbar .load input { flex: 1 1 100%; }
+  .topbar .load button.primary { flex: 1 1 auto; justify-content: center; }
+  .side { position: fixed; z-index: 30; top: var(--top, 52px); left: 0; bottom: 0; width: min(340px, 92vw); height: auto; transform: translateX(-102%); transition: transform .18s ease-out; }
   .side.open { transform: none; box-shadow: 20px 0 60px rgba(0,0,0,.8); }
   .only-mobile { display: inline-flex; }
   .grid { justify-content: center; }
@@ -189,14 +218,27 @@
   <nav class="nav" aria-label="Pages">
     <a href="./" aria-current="page">Legion Viewer</a>
   </nav>
+  <form class="load" id="form">
+    <input id="addr" type="text" placeholder="Wallet address 0x…" autocomplete="off" spellcheck="false" aria-label="Wallet address">
+    <select id="chain" aria-label="Chain">
+      <option value="43114" selected>Avalanche</option>
+      <option value="8217">Kaia</option>
+    </select>
+    <button type="submit" class="primary" id="btn-load">Load legion</button>
+    <button type="button" id="btn-wallet" title="Asks your wallet for its address only: no signature, no transaction, no approval." hidden>Use my wallet</button>
+  </form>
 </header>
 
 <div class="lv">
   <aside class="side" id="side" aria-label="Filters">
+    <button type="button" class="rail" id="btn-rail" aria-label="Show filters" title="Show filters"><span>&raquo;</span><em>Filters</em><b id="rail-n" hidden>0</b></button>
     <div class="side-head">
       <div class="side-title">
         <h2>Filters <b id="active-n" hidden>0</b></h2>
-        <button type="button" id="btn-reset" disabled>Reset</button>
+        <div class="side-actions">
+          <button type="button" id="btn-reset" disabled>Reset</button>
+          <button type="button" class="icon" id="btn-hide" aria-label="Hide filters" title="Hide filters">&laquo;</button>
+        </div>
       </div>
       <div class="seg-wrap" id="scope-wrap">
         <span class="label">Genes to match</span>
@@ -211,27 +253,15 @@
   </aside>
 
   <main class="main">
-    <form class="load" id="form">
-      <input id="addr" type="text" placeholder="Wallet address 0x…" autocomplete="off" spellcheck="false" aria-label="Wallet address">
-      <select id="chain" aria-label="Chain">
-        <option value="43114" selected>Avalanche C-Chain</option>
-        <option value="8217">Kaia</option>
-      </select>
-      <button type="submit" class="primary" id="btn-load">Load legion</button>
-      <button type="button" id="btn-wallet" hidden>Use my wallet</button>
-    </form>
-    <p class="safe">Read-only. "Use my wallet" asks for your address and nothing else: no signature, no transaction, no approval. If a wallet ever asks you to sign here, close it.</p>
     <div class="status" id="status" role="status"></div>
 
     <section class="headline" id="headline" hidden>
+      <h1><span id="sec-title">Legion</span> <span class="tot" id="total"></span> <span class="score" id="sec-score" hidden></span></h1>
       <div class="sections" id="sections" role="tablist" aria-label="Collection">
         <button type="button" role="tab" id="sec-heroes" data-sec="heroes">Heroes <span class="n"></span></button>
         <button type="button" role="tab" id="sec-pets" data-sec="pets">Pets <span class="n"></span></button>
         <button type="button" role="tab" id="sec-gear" data-sec="gear">Gear <span class="n"></span></button>
         <button type="button" role="tab" id="sec-items" data-sec="items">Items <span class="n"></span></button>
-      </div>
-      <div>
-        <h1><span id="sec-title">Legion</span> <span class="tot" id="total"></span> <span class="score" id="sec-score" hidden></span></h1>
       </div>
       <div class="tiles" id="tiles"></div>
       <div class="rbar" id="rbar" aria-hidden="true"></div>
@@ -253,13 +283,14 @@
     <section class="void" id="void">
       <div class="eyebrow">Legion Viewer</div>
       <h2>Every hero.<br><span>Every gene.</span></h2>
-      <p>Paste a wallet and load it: all its heroes on the game's animated cards, with filters for class, genes, skills, stats, looks and gear. Click a card to flip it.</p>
+      <p>Paste a wallet in the bar at the top and load it: heroes, pets, gear and items on the game's cards, with filters for everything. Click a card to flip it.</p>
+      <p class="safe">Read-only. "Use my wallet" asks for your address and nothing else: no signature, no transaction, no approval. If a wallet ever asks you to sign here, close it.</p>
     </section>
 
     <div class="grid" id="grid" aria-live="polite"></div>
   </main>
 </div>
 
-<script type="module" src="app.js?v=10"></script>
+<script type="module" src="app.js?v=11"></script>
 </body>
 </html>
