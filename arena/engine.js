@@ -110,6 +110,18 @@ export const defenceReduction = (def, avgLvl) => Math.min(1, Math.max(0, def / (
 export const CRIT_MULT = 1.5;
 export const BLOCK_BASE = 0.5;
 
+/* ---------- targeting (rules from Ge, 21/11/2026) ----------
+   Two kinds of hits. MELEE hits whoever is there: reach N means the first N enemy positions, whatever the
+   attacker's own position (from P1, P2 or P3 alike, reach 1 hits enemy P1, reach 2 hits P1 or P2).
+   "You hit the first one there": positions are counted on the heroes still standing.
+   RANGED: you choose any enemy, from any position. AOE (e.g. the Archer's Barrage) hits every position.
+   team: array of fighters ordered P1, P2, P3; a fighter has .alive. */
+export function targetable(team, { kind = 'melee', reach = 1 } = {}) {
+  const standing = team.filter((f) => f.alive);
+  if (kind === 'ranged' || kind === 'aoe') return standing;
+  return standing.slice(0, Math.max(1, reach));
+}
+
 /* ---------- the timebar ----------
    Every tick each standing hero gains Initiative equal to its Speed; at 1000 it acts.
    Acting resets it to 0; repositioning gives back 250 and passing 400. */

@@ -39,4 +39,15 @@ const order = (seed) => { const bar = E.createTimebar(fighters(seed)); const out
 const o1 = order(42), o2 = order(42), o3 = order(43);
 console.log(o1 === o2 ? 'OK  ' : 'FAIL', 'same seed, same turn order:', o1); if (o1 !== o2) fails++;
 console.log('     another seed:', o3);
+
+// Targeting: melee reach counts from the enemy front, on heroes still standing; ranged and AOE reach everyone
+const team = [{ id: 'P1', alive: true }, { id: 'P2', alive: true }, { id: 'P3', alive: true }];
+const ids = (l) => l.map((f) => f.id).join(',');
+for (const [label, t, opt, want] of [
+  ['melee reach 1', team, { kind: 'melee', reach: 1 }, 'P1'],
+  ['melee reach 2', team, { kind: 'melee', reach: 2 }, 'P1,P2'],
+  ['ranged', team, { kind: 'ranged' }, 'P1,P2,P3'],
+  ['aoe', team, { kind: 'aoe' }, 'P1,P2,P3'],
+  ['melee reach 1, P1 down', [{ id: 'P1', alive: false }, team[1], team[2]], { kind: 'melee', reach: 1 }, 'P2'],
+]) { const got = ids(E.targetable(t, opt)); const ok = got === want; if (!ok) fails++; console.log(`${ok ? 'OK  ' : 'FAIL'} ${label}: ${got}`); }
 console.log(fails ? `\n${fails} FAILED` : '\nall checks pass');
