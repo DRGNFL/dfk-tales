@@ -6,7 +6,7 @@ import {
 import { createAnimatedHeroCard } from 'https://esm.sh/@defikingdoms/game-sdk@0.1.0/renderer?deps=ethers@5.8.0';
 import { traitScore, heroScore, heroMult, heroScoreX, clearHeroScores } from '../assets/heroscore.js?v=1';
 import { getWallet, onWalletChange, mountWallet, sameAddr, shortAddr, saveLegion, readLegion, ago } from '../assets/session.js?v=1';
-import { decorate, mountSquad } from './squad-ui.js?v=2';
+import { decorate, mountSquad } from './squad-ui.js?v=3';
 import { heroLook, onArmoryChange, heroKey, wearerOf } from '../assets/armory.js?v=1';
 import { hookCardIcons } from '../assets/equip-ui.js?v=1';
 

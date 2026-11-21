@@ -212,7 +212,7 @@ const BERSERKER = [
     } }),
   be({ key: 'primalStrength', tier: 4, branch: 'Bear', name: 'Primal Strength', passive: true, text: 'Passive: +10% ATTACK; in Berserk another +20%, −5% accuracy, and critical hits have 50% to Push 2.' }),
   be({ key: 'wolfPack', tier: 4, branch: 'Wolf', name: 'Wolf Pack', passive: true, text: 'Passive: +10% ATTACK for every ally standing; 5% Berserk for 25 ticks when an ally takes damage; Berserk for 40 ticks when an ally falls. If an enemy kills him, You Are My Enemy: (5·STR.S + 5·LCK.S)% Berserker\'s Mark on it for 50 ticks.' }),
-  be({ key: 'wildFrenzy', tier: 4, branch: 'Boar', name: 'Wild Frenzy', passive: true, text: 'Passive: (5 + 2.5·LCK.S)% that his Attack spends ceil(1 + 0.5·level) MP and becomes 3 attacks, each −30%.' }),
+  be({ key: 'wildFrenzy', tier: 4, branch: 'Boar', name: 'Wild Frenzy', passive: true, text: 'Passive: (5 + 2.5·LCK.S)% that his Basic Attack spends ceil(1 + 0.5·level) MP and becomes 3 attacks, each −30%.' }),
   be({ key: 'sporeCoatedBlade', tier: 5, branch: 'Bear', name: 'Spore-Coated Blade', anim: 'WEAPONS/2H Axe/2H Axe Special2', mana: [4.0, 1.0], amnesia: 4,
     text: '1.2·ATTACK + 0.8·STR; if it deals damage: (70 + 2·DEX.S)% Poison, (40 + 2·STR.S)% the target takes +20% damage from him for 4 turns, (3·STR.S + 3·LCK.S)% Berserker\'s Mark for 30 ticks; then (95 − 2·DEX.S)% Poison on himself, ignoring barriers and Wards.',
     run(c, t) {

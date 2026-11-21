@@ -1,8 +1,8 @@
-/* Legion Viewer — Arena squad mode: a + on every hero card and a tray with the two teams.
+/* Legion Viewer — Arena squad mode: a + on every hero card and a tray with your three heroes (the computer drafts its own).
    Heroes go to the Arena as they are equipped: gear and pet are set on the hero, from the slot icons of its card
    (../assets/armory.js). In the tray the same icons show what each hero wears, and open the same picker.
    The squad itself lives in ../assets/squad.js and is shared with the Arena. */
-import { readSquad, onSquadChange, toggleHero, select, setCap, clearField, swapTeams, clearSquad, findHero, isComplete, CAPS } from '../assets/squad.js?v=2';
+import { readSquad, onSquadChange, toggleHero, select, setCap, clearField, clearSquad, findHero, isComplete, CAPS } from '../assets/squad.js?v=3';
 import { SLOTS, heroLook, onArmoryChange } from '../assets/armory.js?v=1';
 import { openPicker } from '../assets/equip-ui.js?v=1';
 
@@ -22,7 +22,7 @@ body.sq-on .sq-add { display: grid; place-items: center; }
 .slot { position: relative; }
 .sq-toggle { margin-left: auto; border-color: var(--red) !important; color: #ff9aa3; }
 .sq-toggle[aria-pressed="true"] { background: var(--red) !important; color: #fff !important; }
-.sq-tray { position: fixed; z-index: 40; left: 0; right: 0; bottom: 0; background: #050505; border-top: 1px solid var(--line-2); padding: 10px 16px; display: grid; grid-template-columns: 150px auto auto minmax(110px, 1fr); gap: 14px; align-items: start; overflow-x: auto; box-shadow: 0 -12px 30px rgba(0,0,0,.6); }
+.sq-tray { position: fixed; z-index: 40; left: 0; right: 0; bottom: 0; background: #050505; border-top: 1px solid var(--line-2); padding: 10px 16px; display: grid; grid-template-columns: 150px auto minmax(110px, 1fr); gap: 14px; align-items: start; overflow-x: auto; box-shadow: 0 -12px 30px rgba(0,0,0,.6); }
 .sq-tray[hidden] { display: none; }
 .sq-side { display: grid; gap: 6px; }
 .sq-side h2 { margin: 0; font: 700 14px var(--display); letter-spacing: .12em; text-transform: uppercase; }
@@ -75,7 +75,7 @@ function paintButton(b, s) {
   const h = items.get(b);
   b.disabled = false; b.className = 'sq-add';
   const there = findHero(s, h);
-  if (there) { b.textContent = '✓'; b.classList.add('in'); b.title = `In the ${there.team === 'A' ? 'left' : 'right'} team at P${there.i + 1}: click to take out`; }
+  if (there) { b.textContent = '✓'; b.classList.add('in'); b.title = `In the squad at P${there.i + 1}: click to take out`; }
   else if (h.level > s.cap) { b.textContent = '+'; b.disabled = true; b.title = `Level ${h.level}: above the level cap ${s.cap}`; }
   else { b.textContent = '+'; b.title = 'Add to the Arena squad, as it is equipped'; }
 }
@@ -97,25 +97,21 @@ function renderTray() {
   const caps = el('div', 'sq-caps');
   for (const c of CAPS) { const b = el('button', null, `Lv ${c}`); b.type = 'button'; b.setAttribute('aria-pressed', String(c === s.cap)); b.addEventListener('click', () => { setCap(c); lastMsg = `Level cap ${c}.`; renderTray(); }); caps.append(b); }
   side.append(caps, el('div', 'sq-msg', lastMsg || 'Click + on a hero. It fights with what it wears: equip it from the icons around its portrait.'));
-  const teams = ['A', 'B'].map((team) => {
-    const box = el('div', `sq-team ${team.toLowerCase()}`);
-    box.append(el('b', null, team === 'A' ? 'Left team' : 'Right team'));
-    const row = el('div', 'sq-slots');
-    s.teams[team].forEach((slot, i) => row.append(slotCard(s, team, i, slot)));
-    box.append(row);
-    return box;
-  });
+  const team = el('div', 'sq-team a');
+  team.append(el('b', null, 'Your squad · the AI drafts its own'));
+  const row = el('div', 'sq-slots');
+  s.teams.A.forEach((slot, i) => row.append(slotCard(s, 'A', i, slot)));
+  team.append(row);
   const go = el('div', 'sq-go');
   const play = el('a', `play${isComplete(s) ? '' : ' off'}`, 'Play ▸');
   play.href = '../arena/';
   const small = el('div', 'small');
-  const sw = el('button', null, 'Swap sides'); sw.type = 'button'; sw.addEventListener('click', () => { swapTeams(); renderTray(); });
   const cl = el('button', null, 'Clear'); cl.type = 'button'; cl.addEventListener('click', () => { clearSquad(); lastMsg = 'Squad cleared.'; renderTray(); });
   const hide = el('button', null, 'Hide'); hide.type = 'button'; hide.addEventListener('click', () => setOpen(false));
-  small.append(sw, cl, hide);
-  const n = ['A', 'B'].reduce((acc, k) => acc + s.teams[k].filter(Boolean).length, 0);
-  go.append(play, el('div', 'sq-msg', isComplete(s) ? 'Ready: on to the Arena.' : `${n} / 6 heroes${n === 6 ? ' · someone is above the cap' : ''}`), small);
-  tray.replaceChildren(side, ...teams, go);
+  small.append(cl, hide);
+  const n = s.teams.A.filter(Boolean).length;
+  go.append(play, el('div', 'sq-msg', isComplete(s) ? 'Ready: on to the Arena.' : `${n} / 3 heroes${n === 3 ? ' · someone is above the cap' : ''}`), small);
+  tray.replaceChildren(side, team, go);
 }
 function slotCard(s, team, i, slot) {
   const card = el('div', `sq-slot${slot ? ' full' : ''}${s.sel.team === team && s.sel.i === i ? ' sel' : ''}`);

@@ -6,109 +6,187 @@
 <title>Arena · DFK Tales</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500&family=JetBrains+Mono:wght@400;600&display=swap">
 <link rel="stylesheet" href="../assets/tales.css?v=13">
 <style>
-/* Practice arena: two teams of three, the timebar across the top, one red for the side on the right and for every hit. */
+/* Practice arena: your squad against the computer's. One red for the enemy side and for every hit. */
 [hidden] { display: none !important; }
-.ar { max-width: 1280px; margin: 0 auto; padding: 22px clamp(14px, 2.5vw, 30px) 56px; display: grid; gap: 16px; }
-.ar h1 { font: 700 clamp(32px, 5vw, 54px)/0.95 var(--display); text-transform: uppercase; letter-spacing: .02em; margin: 2px 0 10px; }
-.lead { margin: 0; color: var(--muted); font-size: 13.5px; max-width: 86ch; }
-.status { font: 12.5px var(--mono); color: var(--muted); }
+.ar { max-width: 1280px; margin: 0 auto; padding: 22px clamp(14px, 2.5vw, 30px) 56px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+#setup { display: grid; gap: 14px; min-width: 0; }
+.ar h1 { font: 700 clamp(32px, 5vw, 54px)/0.95 var(--display); text-transform: uppercase; letter-spacing: .02em; margin: 2px 0 0; }
+.status { font: 12.5px var(--mono); color: var(--muted); margin: 0; }
 .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-button[aria-pressed="true"] { background: var(--text); border-color: var(--text); color: #000; }
-a.btn { display: inline-block; padding: 8px 14px; border: 1px solid var(--line-2); color: var(--text); text-decoration: none; font: 600 12px var(--display); letter-spacing: .12em; text-transform: uppercase; }
+a.btn { display: inline-block; padding: 10px 14px; border: 1px solid var(--line-2); color: var(--text); text-decoration: none; font: 600 12px var(--display); letter-spacing: .12em; text-transform: uppercase; }
 a.btn:hover { border-color: var(--text); }
 
-/* ---------- setup: the two squads and the Codex ---------- */
-.squads { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-@media (max-width: 980px) { .squads { grid-template-columns: 1fr; } }
-.squad { display: grid; gap: 8px; align-content: start; }
-.squad > h2 { margin: 0; font: 600 12px var(--display); letter-spacing: .16em; text-transform: uppercase; display: flex; justify-content: space-between; }
-.squad.b > h2 { color: var(--red); }
-.sheet { border: 1px solid var(--line); background: var(--panel); padding: 10px 12px; display: grid; gap: 8px; }
-.squad.b .sheet { border-left: 2px solid var(--red); }
-.squad.a .sheet { border-left: 2px solid var(--text); }
-.sheet.emptyslot { color: var(--muted); font: 12px var(--mono); border-style: dashed; }
-.sh-head { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
-.sh-head b { font: 700 15px var(--display); letter-spacing: .04em; text-transform: uppercase; }
-.sh-head span { font: 11px var(--mono); color: var(--muted); white-space: nowrap; }
-.sh-line { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
-.slotic { width: 28px; height: 28px; border: 1px solid #262626; background: #000; display: grid; place-items: center; font: 10px var(--mono); color: #444; }
-.slotic.on { border-color: #4a4a4a; }
-.slotic img { width: 26px; height: 26px; image-rendering: pixelated; }
-.slotic.pet.on { color: #ffd34d; }
-.sh-line .gap { width: 8px; }
+/* ---------- setup ---------- */
+.su-head { display: flex; justify-content: space-between; align-items: end; gap: 14px; flex-wrap: wrap; }
+button.fight { padding: 14px 30px; font-size: 15px; letter-spacing: .22em; }
+
+/* The arena's scene: every scene of the game's cards, as small tiles. */
+.scenes { display: flex; gap: 5px; align-items: center; overflow-x: auto; padding: 2px 0 6px; scrollbar-width: thin; }
+.scenes .lbl { flex: none; min-width: 104px; font: 600 10px var(--display); letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+.scenes .lbl b { display: block; font: 700 13px var(--display); letter-spacing: .06em; color: var(--text); }
+.sc { flex: none; width: 42px; height: 40px; padding: 0; border: 1px solid #262626; background: #000 center / 100% 100% no-repeat; image-rendering: pixelated; }
+.sc:hover { border-color: #fff; }
+.sc[aria-pressed="true"] { border-color: var(--red); box-shadow: 0 0 0 1px var(--red), 0 0 12px rgba(227, 23, 43, .55); }
+.sc.rnd { justify-content: center; font: 700 20px var(--display); color: var(--muted); background: #0b0b0b; }
+.sc-sep { flex: none; width: 1px; height: 34px; background: var(--line-2); margin: 0 4px; }
+
+/* Your three heroes, one tab each. */
+.tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 700px) { .tabs { grid-template-columns: 1fr; } }
+.tab { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: center; padding: 9px 12px; text-align: left; text-transform: none; letter-spacing: 0; background: var(--panel); border: 1px solid var(--line); color: var(--text); font: inherit; }
+.tab:hover { border-color: #555; }
+.tab[aria-selected="true"] { border-color: var(--text); background: #121212; box-shadow: inset 0 -3px 0 var(--red); }
+.tab .pp { font: 700 24px var(--display); color: #555; }
+.tab[aria-selected="true"] .pp { color: var(--red); }
+.tab b { font: 700 14px var(--display); letter-spacing: .04em; text-transform: uppercase; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tab b img { width: 15px; height: 15px; vertical-align: -2px; margin-right: 6px; image-rendering: pixelated; }
+.tab small { font: 10.5px var(--mono); color: var(--muted); display: block; }
+.tab.over small { color: var(--red); }
+.tab.empty { border-style: dashed; color: var(--muted); }
+.tab .picks { display: flex; gap: 3px; margin-top: 5px; min-height: 22px; }
+.tab .picks img { width: 22px; height: 22px; image-rendering: pixelated; border: 1px solid #333; background: #000; }
+
+/* The hero's card, open, beside its Skill Codex: three disciplines, five tiers. */
+.editor { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 880px) { .editor { grid-template-columns: 1fr; justify-items: center; } }
+.cardbox { position: relative; width: 300px; height: 430px; }
+.cardbox:empty { border: 1px solid var(--line); background: repeating-linear-gradient(135deg, #070707 0 8px, #0b0b0b 8px 16px); }
+.cx { width: 100%; min-height: 430px; border: 1px solid var(--line); background: radial-gradient(ellipse at 50% 0%, #161616, #070707 72%); padding: 14px 16px 12px; display: grid; gap: 11px; align-content: start; }
+.cx-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.cx-head b { font: 700 21px var(--display); letter-spacing: .04em; text-transform: uppercase; }
+.cx-head b img { width: 22px; height: 22px; vertical-align: -3px; margin-right: 9px; image-rendering: pixelated; }
+.cx-head span { font: 11px var(--mono); color: var(--muted); }
+.cx-traits { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .chip { font: 10.5px var(--mono); border: 1px solid var(--line-2); padding: 3px 6px; color: #cfcfcf; cursor: default; }
 .chip.dim { color: var(--muted); border-style: dashed; }
-.codex { display: grid; gap: 4px; }
-.tier { display: grid; grid-template-columns: 22px repeat(3, minmax(0, 1fr)); gap: 4px; align-items: stretch; }
-.tier em { font: 600 10px var(--display); letter-spacing: .1em; color: var(--muted); font-style: normal; align-self: center; }
-.tier button { padding: 4px 6px; font: 600 11px var(--display); letter-spacing: .03em; text-transform: none; text-align: left; white-space: normal; line-height: 1.15; min-height: 30px; display: flex; gap: 6px; align-items: center; }
-.tier button svg { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.tier button img { width: 22px; height: 22px; flex: none; image-rendering: pixelated; }
-.tier button.pas img { opacity: .75; }
-.sh-head b img { width: 18px; height: 18px; vertical-align: -3px; margin-right: 6px; image-rendering: pixelated; }
 .chip img { width: 14px; height: 14px; vertical-align: -3px; margin-right: 4px; image-rendering: pixelated; }
-.seg { display: inline-flex; align-items: stretch; border: 1px solid var(--line-2); }
-.seg > span { font: 600 10px var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); padding: 0 8px; display: flex; align-items: center; }
-.seg button { border: 0; border-left: 1px solid var(--line-2); padding: 6px 12px; }
-.seg button[aria-pressed="true"] { background: var(--red); border-color: var(--red); color: #fff; }
-.tier button.pas { color: var(--muted); }
-.tier button.pas[aria-pressed="true"] { color: #444; }
-.tier.locked button { opacity: .25; pointer-events: none; }
-.desc { font: 11.5px var(--body); color: #d6d6d6; min-height: 1.4em; }
-.desc b { font-family: var(--display); letter-spacing: .03em; }
+.cx-grid { display: grid; grid-template-columns: 50px repeat(3, minmax(0, 1fr)); gap: 9px 10px; }
+.cx-grid .disc { font: 700 12px var(--display); letter-spacing: .2em; text-transform: uppercase; text-align: center; color: #d0d0d0; padding-bottom: 5px; border-bottom: 1px solid var(--line-2); align-self: end; }
+.cx-grid .tl { display: grid; align-content: center; font: 700 15px var(--display); letter-spacing: .06em; color: #8a8a8a; }
+.cx-grid .tl small { font: 9.5px var(--mono); letter-spacing: 0; color: #555; }
+.cx-grid .tl.locked { color: #3a3a3a; }
+.node { position: relative; display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: 9px; align-items: center; min-height: 58px; padding: 5px 8px 5px 5px; border: 1px solid #1e1e1e; background: #0b0b0b; color: #8f8f8f; text-align: left; text-transform: none; letter-spacing: 0; font: inherit; }
+.node::before { content: ""; position: absolute; left: 28px; top: -10px; width: 2px; height: 9px; background: #222; }
+.node.t1::before { display: none; }
+.node .ic { width: 46px; height: 46px; display: grid; place-items: center; border: 1px solid #2a2a2a; background: #000; }
+.node .ic img { width: 44px; height: 44px; image-rendering: pixelated; filter: grayscale(.85) brightness(.55); transition: filter .15s; }
+.node .ic svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.7; }
+.node .nm { display: block; font: 600 12.5px/1.15 var(--display); letter-spacing: .02em; }
+.node .mt { display: block; margin-top: 3px; font: 10px var(--mono); color: #555; }
+.node:hover { border-color: #555; color: #e0e0e0; }
+.node:hover .ic img { filter: none; }
+.node[aria-pressed="true"] { border-color: var(--red); color: #fff; background: linear-gradient(180deg, #2a060c, #0b0b0b 80%); box-shadow: 0 0 0 1px var(--red), 0 0 18px rgba(227, 23, 43, .32); }
+.node[aria-pressed="true"]::before { background: var(--red); }
+.node[aria-pressed="true"] .ic { border-color: var(--red); }
+.node[aria-pressed="true"] .ic img { filter: none; }
+.node[aria-pressed="true"] .mt { color: #d58a91; }
+.node.pas .ic { border-style: dashed; }
+.node.locked { opacity: .22; pointer-events: none; }
+.cx-desc { min-height: 66px; border-top: 1px solid var(--line); padding-top: 10px; font: 12.5px/1.45 var(--body); color: #d6d6d6; }
+.cx-desc b { display: block; font: 700 14px var(--display); letter-spacing: .04em; color: #fff; }
+.cx-desc small { display: block; margin: 1px 0 4px; font: 10.5px var(--mono); color: var(--muted); }
+.cx-desc .nt { display: block; margin-top: 4px; font-size: 11.5px; color: var(--muted); }
 .note { font: 11px var(--mono); color: var(--muted); }
 
-/* ---------- battle ---------- */
-.bhead { display: flex; justify-content: space-between; align-items: end; gap: 10px; flex-wrap: wrap; }
-.bhead .eyebrow { margin: 0; }
-.timebar { position: relative; height: 46px; border: 1px solid var(--line-2); background: linear-gradient(90deg, #070707, #101010 92%, #1a0306); }
+/* ---------- battle: the whole window ---------- */
+body.in-battle { overflow: hidden; }
+#battle { position: fixed; inset: 0; z-index: 30; display: grid; grid-template-rows: 46px minmax(0, 1fr) auto; background: #000; }
+.timebar { position: relative; border-bottom: 1px solid var(--line-2); background: linear-gradient(90deg, #070707, #101010 92%, #1a0306); }
 .timebar .goal { position: absolute; right: 0; top: 0; bottom: 0; width: 2px; background: var(--red); }
-.timebar .tk { position: absolute; right: 4px; bottom: 2px; font: 9.5px var(--mono); color: var(--muted); }
-.mk { position: absolute; top: 4px; width: 34px; height: 34px; transform: translateX(-50%); transition: left .08s linear; border: 2px solid var(--text); background: #000; overflow: hidden; }
+.timebar .tk { position: absolute; right: 6px; bottom: 2px; font: 9.5px var(--mono); color: var(--muted); }
+.mk { position: absolute; top: 5px; width: 34px; height: 34px; transform: translateX(-50%); transition: left .08s linear; border: 2px solid var(--text); background: #000; overflow: hidden; }
 .mk.b { border-color: var(--red); }
 .mk canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
 .mk.down { display: none; }
-.mk.turn { box-shadow: 0 0 0 2px #000, 0 0 10px 2px rgba(255,255,255,.8); z-index: 2; }
+.mk.turn { box-shadow: 0 0 0 2px #000, 0 0 10px 2px rgba(255, 255, 255, .8); z-index: 2; }
 .mk.ch { border-style: dashed; }
 
-/* One wide field: the game's colosseum and its mirror side by side (110 x 52 pixels), scaled up crisp.
-   Heroes as big as on the Hero Viewer stage: the rig canvas is as tall as the field, feet on row 48 of 52. */
-.field { position: relative; aspect-ratio: 110 / 52; overflow: hidden; border: 1px solid var(--line-2); background: #0a0a0a; user-select: none; }
-.field .half { position: absolute; top: 0; bottom: 0; width: 50%; background: var(--scene) center / 100% 100% no-repeat; image-rendering: pixelated; }
-.field .half.l { left: 0; }
-.field .half.r { right: 0; transform: scaleX(-1); }
-.field .shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.3), rgba(0,0,0,0) 40%); pointer-events: none; }
-.ftr { position: absolute; top: 0; bottom: 0; width: 12%; transition: left .35s ease; }
-.ftr canvas { position: absolute; left: 50%; top: -0.6923%; height: 100%; aspect-ratio: 1 / 1; transform: translateX(-50%); pointer-events: none; }
-.ftr.a canvas { transform: translateX(-50%) scaleX(-1); }
-.ftr .body { position: absolute; left: 6%; right: 6%; top: 44%; bottom: 6%; padding: 0; border: 0; background: none; cursor: default; }
-.ftr.can .body { cursor: pointer; }
-.ftr.can .body:hover { background: radial-gradient(ellipse at 50% 92%, rgba(227,23,43,.35), transparent 70%); }
-.ftr.can.ally .body:hover { background: radial-gradient(ellipse at 50% 92%, rgba(255,255,255,.3), transparent 70%); }
-.ftr::after { content: ""; position: absolute; left: 14%; right: 14%; top: 90.5%; height: 3.2%; border-radius: 50%; pointer-events: none; }
-.ftr.turn::after { background: rgba(255,255,255,.55); box-shadow: 0 0 12px rgba(255,255,255,.6); }
-.ftr.b.turn::after { background: rgba(227,23,43,.7); box-shadow: 0 0 12px rgba(227,23,43,.8); }
+.stage { position: relative; overflow: hidden; min-height: 0; }
+/* The field: the scene's 55 x 52 pixel tiles side by side, mirrored from the centre, as tall as the field.
+   Heroes stand on the scene's ground row (48 of 52); their size follows --u, the field's height (or width / 2 on narrow screens). */
+.field { position: absolute; inset: 0; overflow: hidden; user-select: none; background: #0a0a0a; }
+.scene { position: absolute; inset: 0; pointer-events: none; }
+.scene i { position: absolute; top: 0; height: 100%; background: center / 100% 100% no-repeat; image-rendering: pixelated; }
+.scene i.m { transform: scaleX(-1); }
+.scene.front { z-index: 3; }
+.field .shade { position: absolute; inset: 0; z-index: 2; background: linear-gradient(180deg, rgba(0, 0, 0, .38), rgba(0, 0, 0, 0) 34%); pointer-events: none; }
+.ftr { position: absolute; pointer-events: none; transition: left .35s ease; }
+.ftr canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.ftr.a canvas { transform: scaleX(-1); }
+.ftr .body { position: absolute; left: 39%; right: 39%; top: 56%; bottom: 5%; padding: 0; border: 0; background: none; cursor: default; pointer-events: auto; z-index: 4; }
+.ftr.can .body, .ftr.mine .body { cursor: pointer; }
+.ftr.can .body:hover { background: radial-gradient(ellipse at 50% 92%, rgba(227, 23, 43, .38), transparent 70%); }
+.ftr.can.ally .body:hover { background: radial-gradient(ellipse at 50% 92%, rgba(255, 255, 255, .3), transparent 70%); }
+.ftr::after { content: ""; position: absolute; left: 41%; right: 41%; top: 91.2%; height: 2.6%; border-radius: 50%; pointer-events: none; }
+.ftr.turn::after { background: rgba(255, 255, 255, .55); box-shadow: 0 0 12px rgba(255, 255, 255, .6); }
+.ftr.b.turn::after { background: rgba(227, 23, 43, .7); box-shadow: 0 0 12px rgba(227, 23, 43, .8); }
 .ftr.down { opacity: .45; }
-.ftr .chance { position: absolute; left: 50%; top: 36%; transform: translateX(-50%); font: 700 clamp(11px, 1.1vw, 14px) var(--mono); color: #fff; background: var(--red); padding: 2px 6px; pointer-events: none; }
+.ftr .chance { position: absolute; z-index: 5; left: 50%; top: 50%; transform: translateX(-50%); font: 700 calc(var(--u) * .022)/1.2 var(--mono); color: #fff; background: var(--red); padding: 2px 7px; pointer-events: none; }
 .ftr.ally .chance { background: #e8e8e8; color: #000; }
 .ftr .chance:empty { display: none; }
-.float { position: absolute; z-index: 4; left: 50%; top: 40%; transform: translateX(-50%); font: 700 clamp(15px, 1.8vw, 22px) var(--mono); color: #fff; text-shadow: 0 2px 0 #000, 0 0 6px #000; pointer-events: none; animation: rise 1.2s ease-out forwards; white-space: nowrap; }
-.float.miss { color: #bbb; font-size: clamp(12px, 1.3vw, 16px); }
-.float.crit { color: #ffd34d; font-size: clamp(18px, 2.1vw, 26px); }
-.float.heal { color: #9be39b; }
-.float.abs { color: #9fb6cf; font-size: clamp(12px, 1.3vw, 16px); }
-.float.st { font-size: clamp(10px, 1vw, 13px); color: #ffb3ba; top: 33%; }
-.float.st.good { color: #e8e8e8; }
-@keyframes rise { from { opacity: 1; transform: translate(-50%, 0); } to { opacity: 0; transform: translate(-50%, -34px); } }
 
-/* The HUD under the field, laid out like the game: heroes stacked left and right, the action bar in the middle. */
-.hud { display: grid; grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) minmax(220px, 280px); gap: 14px; background: #050505; border: 1px solid var(--line-2); border-top: 0; padding: 10px 12px 12px; }
+/* Damage in big battle numbers: they pop, then rise and fade. */
+.float { position: absolute; z-index: 6; left: 50%; top: 55%; transform: translate(-50%, 0); font: 400 calc(var(--u) * .064)/1 "Bungee", var(--display); color: #fff;
+  -webkit-text-stroke: calc(var(--u) * .0042) #000; paint-order: stroke fill; text-shadow: 0 calc(var(--u) * .006) 0 #000, 0 0 12px rgba(0, 0, 0, .7);
+  pointer-events: none; white-space: nowrap; animation: hitpop 1.35s ease-out forwards; }
+.float.crit { color: #ffd34d; font-size: calc(var(--u) * .088); animation-name: critpop; }
+.float.heal { color: #86f59a; }
+.float.miss { color: #d0d0d0; font-size: calc(var(--u) * .036); }
+.float.abs { color: #a9c8ff; font-size: calc(var(--u) * .04); }
+.float.st { top: 50%; font: 700 calc(var(--u) * .024)/1 var(--display); letter-spacing: .06em; -webkit-text-stroke: 0; color: #ffb3ba; text-shadow: 0 1px 0 #000, 0 0 4px #000, 0 0 2px #000; animation-name: rise; }
+.float.st.good { color: #eaeaea; }
+@keyframes hitpop {
+  0% { opacity: 0; transform: translate(-50%, 0) scale(1.9); }
+  9% { opacity: 1; transform: translate(-50%, 0) scale(.9); }
+  17% { transform: translate(-50%, 0) scale(1.06); }
+  25% { transform: translate(-50%, 0) scale(1); }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, calc(var(--u) * -.075)) scale(1); }
+}
+@keyframes critpop {
+  0% { opacity: 0; transform: translate(-50%, 0) scale(2.5) rotate(-9deg); }
+  9% { opacity: 1; transform: translate(-50%, 0) scale(.88) rotate(4deg); }
+  15% { transform: translate(-53%, 0) scale(1.1) rotate(-3deg); }
+  21% { transform: translate(-47%, 0) scale(1.02) rotate(2deg); }
+  28% { transform: translate(-50%, 0) scale(1) rotate(0); }
+  72% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, calc(var(--u) * -.085)) scale(1); }
+}
+@keyframes rise { from { opacity: 1; transform: translate(-50%, 0); } to { opacity: 0; transform: translate(-50%, calc(var(--u) * -.05)); } }
+
+/* Over the field: buttons top left, the battle log top right, the result in the middle. */
+.ov { position: absolute; z-index: 8; }
+.ov-tl { left: 14px; top: 12px; display: grid; gap: 7px; justify-items: start; }
+.ov-tl button { padding: 7px 11px; font-size: 11px; background: rgba(0, 0, 0, .62); }
+.ov-tl .eyebrow { color: #c2c2c2; text-shadow: 0 1px 2px #000, 0 0 6px #000; }
+.ov-log { right: 14px; top: 12px; width: min(360px, 36vw); max-height: 46%; display: grid; grid-template-rows: auto minmax(0, 1fr); background: rgba(0, 0, 0, .64); border: 1px solid rgba(255, 255, 255, .09); }
+.ov-log > button { justify-content: space-between; width: 100%; border: 0; background: none; padding: 7px 10px; font-size: 10.5px; color: #a8a8a8; }
+.ov-log.closed .log { display: none; }
+.log { list-style: none; margin: 0; padding: 0 10px 9px; display: grid; gap: 2px; align-content: start; overflow: auto; font: 11.5px/1.35 var(--mono); color: #9c9c9c; scrollbar-width: thin; }
+.log li { border-left: 2px solid transparent; padding-left: 6px; }
+.log li.grp { border: 0; padding: 0; }
+.log li.grp ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; }
+.log li.hit { color: #ececec; }
+.log li.hit.ally { border-left-color: #e8e8e8; }
+.log li.hit.foe { border-left-color: var(--red); color: #ffc2c8; }
+.log li.sub { color: #8a8a8a; }
+.log li.grp li.sub { padding-left: 16px; color: #9c9c9c; }
+.log li.ko { color: var(--red); font-weight: 600; }
+.log li.sys { color: #8a8a8a; font-style: italic; }
+.banner { position: absolute; inset: 0; z-index: 7; display: grid; place-items: center; pointer-events: none; }
+.banner b { font: 400 clamp(44px, 9vw, 130px)/1 "Bungee", var(--display); color: #fff; -webkit-text-stroke: 3px #000; paint-order: stroke fill; text-shadow: 0 6px 0 #000, 0 0 40px rgba(0, 0, 0, .8); animation: banner .9s ease-out both; }
+.banner.lose b { color: var(--red); }
+@keyframes banner { 0% { opacity: 0; transform: scale(2); } 40% { opacity: 1; transform: scale(.95); } 60% { transform: scale(1.03); } 100% { opacity: 1; transform: scale(1); } }
+
+/* The HUD under the field, as in the game: heroes stacked left and right, the action bar in the middle. */
+.hud { display: grid; grid-template-columns: minmax(190px, min(300px, 19vw)) minmax(0, 1fr) minmax(190px, min(300px, 19vw)); gap: 16px; background: #050505; border-top: 1px solid var(--line-2); padding: 10px 16px 12px; }
 @media (max-width: 900px) { .hud { grid-template-columns: 1fr 1fr; } .hud .mid { grid-column: 1 / -1; order: 3; } }
 .side { display: grid; gap: 6px; align-content: start; }
 .plate { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px; align-items: center; padding: 3px 4px; border: 0; background: none; text-align: left; color: inherit; font: inherit; text-transform: none; letter-spacing: 0; cursor: default; position: relative; }
+.side.a .plate { cursor: pointer; }
 .side.b .plate { grid-template-columns: minmax(0, 1fr) 44px; text-align: right; }
 .side.b .plate .pt { order: 2; }
 .plate .pt { width: 44px; height: 44px; border: 2px solid #3a3a3a; background: #000; overflow: hidden; }
@@ -119,19 +197,20 @@ a.btn:hover { border-color: var(--text); }
 .side.b .plate.turn .pt { border-color: var(--red); }
 .plate.turn::before { content: "▸"; position: absolute; left: -11px; top: 14px; color: #fff; font-size: 13px; }
 .side.b .plate.turn::before { content: "◂"; left: auto; right: -11px; color: var(--red); }
+.plate.shown { background: rgba(255, 255, 255, .06); box-shadow: inset 2px 0 0 #fff; }
 .plate.down { opacity: .35; }
-.plate.can { cursor: pointer; background: rgba(227,23,43,.12); }
-.plate.can.ally { background: rgba(255,255,255,.08); }
+.plate.can { cursor: pointer; background: rgba(227, 23, 43, .14); }
+.plate.can.ally { background: rgba(255, 255, 255, .1); }
 .bar { position: relative; height: 8px; background: #1a1a1a; margin-top: 3px; }
 .bar i { position: absolute; inset: 0 auto 0 0; transition: width .25s; background: #e8e8e8; }
 .side.b .bar.hp i { background: var(--red); }
-.bar u { position: absolute; inset: 0 auto 0 0; background: rgba(255,255,255,.35); transition: width .25s; }
+.bar u { position: absolute; inset: 0 auto 0 0; background: rgba(255, 255, 255, .35); transition: width .25s; }
 .bar.mp { height: 4px; margin-top: 2px; }
 .bar.mp i { background: #6f8db0; }
 .bar.ap { height: 4px; margin-top: 2px; }
 .bar.ap i { background: #b9995a; }
 .side.b .bar i, .side.b .bar u { inset: 0 0 0 auto; }
-.plate .tags { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 3px; min-height: 0; }
+.plate .tags { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 3px; }
 .side.b .plate .tags { justify-content: flex-end; }
 .plate .tags span { font: 600 8.5px var(--mono); padding: 0 3px; border: 1px solid #333; color: #ccc; }
 .plate .tags span.bad { border-color: var(--red); color: #ffb3ba; }
@@ -142,38 +221,38 @@ a.btn:hover { border-color: var(--text); }
 .plate .nm img { width: 13px; height: 13px; vertical-align: -2px; margin-right: 4px; image-rendering: pixelated; }
 .side.b .plate .nm img { margin: 0 0 0 4px; }
 
-.mid { display: grid; gap: 8px; align-content: start; justify-items: center; }
-.turnline { font: 700 13px var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); min-height: 18px; }
+.mid { display: grid; gap: 7px; align-content: start; justify-items: center; }
+.turnline { font: 700 13px var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); min-height: 18px; text-align: center; }
 .turnline b { color: var(--text); }
 .turnline b.b { color: var(--red); }
-.turnline.result { font-size: clamp(20px, 3vw, 30px); color: var(--text); }
+.turnline.result { font-size: clamp(18px, 2.4vw, 26px); color: var(--text); }
+.handline { display: flex; gap: 8px; align-items: center; min-height: 20px; font: 700 13px var(--display); letter-spacing: .08em; text-transform: uppercase; }
+.handline img { width: 16px; height: 16px; image-rendering: pixelated; }
+.handline em { font: 600 9.5px var(--mono); letter-spacing: .08em; font-style: normal; padding: 2px 6px; border: 1px solid var(--line-2); color: var(--muted); }
+.handline em.live { background: var(--red); border-color: var(--red); color: #fff; }
 .groups { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+.groups.locked { pointer-events: none; }
 .grp h3 { margin: 0 0 5px; font: 600 10px var(--display); letter-spacing: .16em; text-transform: uppercase; color: var(--muted); text-align: left; }
-.tiles { display: grid; grid-template-columns: repeat(4, 42px); gap: 4px; }
-.tile { position: relative; width: 42px; height: 42px; padding: 0; border: 1px solid #333; background: #0d0d0d; color: #e8e8e8; display: grid; place-items: center; cursor: pointer; }
-.tile svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-.tile img { width: 38px; height: 38px; image-rendering: pixelated; display: block; }
+.tiles { display: grid; grid-template-columns: repeat(4, 46px); gap: 4px; }
+.tile { position: relative; width: 46px; height: 46px; padding: 0; border: 1px solid #333; background: #0d0d0d; color: #e8e8e8; display: grid; place-items: center; cursor: pointer; transition: opacity .15s; }
+.tile svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.tile img { width: 42px; height: 42px; image-rendering: pixelated; display: block; }
 .tile.passive img { opacity: .8; }
-.mid.ai .tiles { pointer-events: none; }
-.tile:hover:not([disabled]) { border-color: #fff; background: #161616; }
+.tile:hover:not(.off) { border-color: #fff; background: #161616; }
 .tile.primary { border-color: var(--red); color: #fff; background: #1a0306; }
-.tile.pick { border-color: var(--red); box-shadow: 0 0 0 1px var(--red), 0 0 12px rgba(227,23,43,.6); }
-.tile[disabled] { opacity: .3; cursor: not-allowed; }
+.tile.pick { border-color: var(--red); box-shadow: 0 0 0 1px var(--red), 0 0 12px rgba(227, 23, 43, .6); }
+.tile.off { opacity: .3; cursor: not-allowed; }
 .tile.passive { cursor: help; border-style: dashed; color: #9a9a9a; background: #080808; }
 .tile.empty { border-color: #141414; background: none; cursor: default; }
+.groups.view .tile:not(.empty):not(.off) { opacity: .6; cursor: help; }
+.groups.view .tile:hover:not(.empty):not(.off) { opacity: 1; }
 .tile .mp { position: absolute; right: 2px; bottom: 1px; font: 600 9px var(--mono); color: #8fb0d6; }
-.tile .cd { position: absolute; inset: 0; display: grid; place-items: center; font: 700 18px var(--mono); color: #fff; background: rgba(0,0,0,.55); }
+.tile .cd { position: absolute; inset: 0; display: grid; place-items: center; font: 700 18px var(--mono); color: #fff; background: rgba(0, 0, 0, .55); }
 .tile .tag { position: absolute; left: 2px; top: 1px; font: 600 8px var(--mono); color: #777; }
 .tile.trait .tag { color: #c9a64a; }
 .tile.pet .tag { color: #ffd34d; }
-.logbox { border: 1px solid var(--line); background: var(--panel); }
-.logbox summary { cursor: pointer; padding: 8px 12px; font: 600 11px var(--display); letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
-.log { list-style: none; margin: 0; padding: 0 12px 12px; display: grid; gap: 3px; font: 12px var(--mono); color: var(--muted); max-height: 320px; overflow: auto; }
-.log li.hit { color: var(--text); }
-.log li.sub { padding-left: 12px; }
-.log li.ko { color: var(--red); font-weight: 600; }
-.log li.sys { color: #9a9a9a; font-style: italic; }
-.tip { position: fixed; z-index: 50; max-width: 300px; background: #0b0b0b; border: 1px solid var(--line-2); padding: 8px 10px; pointer-events: none; box-shadow: 0 10px 30px rgba(0,0,0,.7); }
+
+.tip { position: fixed; z-index: 50; max-width: 300px; background: #0b0b0b; border: 1px solid var(--line-2); padding: 8px 10px; pointer-events: none; box-shadow: 0 10px 30px rgba(0, 0, 0, .7); }
 .tip b { font: 700 13px var(--display); letter-spacing: .04em; display: block; }
 .tip small { font: 10.5px var(--mono); color: var(--muted); display: block; margin: 2px 0 4px; }
 .tip p { margin: 0; font: 12px/1.4 var(--body); color: #ddd; }
@@ -195,46 +274,63 @@ footer p { margin: 0; }
 
 <main class="ar">
   <section id="setup">
-    <div class="eyebrow">Practice arena · version 0.4 · eight classes · the right team can play itself</div>
-    <h1>Arena</h1>
-    <p class="lead">Build the squad in the Legion Viewer (<b>Arena squad</b>). Heroes fight with what they wear: equip them from the icons around the portrait of their card. Here, one Codex skill per tier, then Fight. The right team is played by the computer unless you switch it to <b>You</b>.</p>
-    <div class="row" style="justify-content:space-between;margin-top:12px">
-      <span class="status" id="status">Reading the squad…</span>
-      <div class="row"><span class="seg" id="ai-switch" role="group" aria-label="Who plays the right team"><span>Right team</span><button type="button" data-v="ai">AI</button><button type="button" data-v="you">You</button></span><a class="btn" href="../legion-viewer/?squad=1">Edit squad</a><button type="button" class="primary" id="btn-fight" disabled>Fight</button></div>
+    <div class="su-head">
+      <div>
+        <div class="eyebrow">Practice arena · version 0.5 · you against the AI</div>
+        <h1>Arena</h1>
+      </div>
+      <div class="row"><a class="btn" href="../legion-viewer/?squad=1">Edit squad</a><button type="button" class="primary fight" id="btn-fight" disabled>Fight ▸</button></div>
     </div>
-    <div class="squads" id="squads" style="margin-top:12px"></div>
+    <p class="status" id="status">Reading the squad…</p>
+    <div class="scenes" id="scenes" aria-label="Scene of the arena"></div>
+    <div class="tabs" id="tabs" role="tablist" aria-label="Your squad"></div>
+    <div class="editor" id="editor">
+      <div class="cardbox" id="cardbox"></div>
+      <div class="cx" id="codex"></div>
+    </div>
   </section>
 
   <section id="battle" hidden>
-    <div class="bhead">
-      <div class="eyebrow" id="b-eyebrow"></div>
-      <div class="row"><button type="button" id="btn-rematch" hidden>Rematch</button><button type="button" id="btn-new">Back to the squads</button></div>
-    </div>
-    <div>
-      <div class="timebar" id="timebar"><div class="goal"></div><span class="tk" id="tick"></span></div>
-      <div class="field" id="field"><div class="half l"></div><div class="half r"></div><div class="shade"></div></div>
-      <div class="hud">
-        <div class="side a" id="side-a"></div>
-        <div class="mid">
-          <div class="turnline" id="turnline"></div>
-          <div class="groups">
-            <div class="grp"><h3>Actions &amp; abilities</h3><div class="tiles" id="g-actions"></div></div>
-            <div class="grp"><h3>Skills</h3><div class="tiles" id="g-skills"></div></div>
-            <div class="grp"><h3>Passives</h3><div class="tiles" id="g-passives"></div></div>
-          </div>
-        </div>
-        <div class="side b" id="side-b"></div>
+    <div class="timebar" id="timebar"><div class="goal"></div><span class="tk" id="tick"></span></div>
+    <div class="stage" id="stage">
+      <div class="field" id="field">
+        <div class="scene back" id="scene-back"></div>
+        <div class="shade"></div>
+        <div class="scene front" id="scene-front"></div>
       </div>
+      <div class="ov ov-tl">
+        <div class="row">
+          <button type="button" id="btn-back">◂ Squad</button>
+          <button type="button" id="btn-rematch" hidden>Rematch</button>
+          <button type="button" id="btn-next" hidden>New opponent</button>
+          <button type="button" id="btn-full" title="Full screen">⛶</button>
+        </div>
+        <div class="eyebrow" id="b-eyebrow"></div>
+      </div>
+      <div class="ov ov-log" id="logbox"><button type="button" id="log-toggle"><span>Battle log</span><span id="log-arrow">▾</span></button><ul class="log" id="log"></ul></div>
+      <div class="banner" id="result" hidden><b></b></div>
     </div>
-    <details class="logbox"><summary>Battle log</summary><ul class="log" id="log"></ul></details>
+    <div class="hud">
+      <div class="side a" id="side-a"></div>
+      <div class="mid">
+        <div class="turnline" id="turnline"></div>
+        <div class="handline" id="handline"></div>
+        <div class="groups" id="groups">
+          <div class="grp"><h3>Actions &amp; abilities</h3><div class="tiles" id="g-actions"></div></div>
+          <div class="grp"><h3>Skills</h3><div class="tiles" id="g-skills"></div></div>
+          <div class="grp"><h3>Passives</h3><div class="tiles" id="g-passives"></div></div>
+        </div>
+      </div>
+      <div class="side b" id="side-b"></div>
+    </div>
   </section>
   <div class="tip" id="tip" hidden></div>
 
   <footer>
-    <p>Version 0.4. Gear and pets are what each hero wears in this browser, set from its card; without a weapon or armour a hero fights with the Squire weapon of its class and Medium armour, on loan. Melee or ranged comes from the weapon.</p>
-    <p>Skills from the patch notes up to 2.8.2 and, where they leave a gap, the game client's own texts; icons from the game client. Traits from the class pages, pet bonuses from the game's list. The computer opponent tries each legal move a few times and plays the one that does most. Stats, accuracy, Speed and starting Initiative: Hubert's Dynamic Stat Calculator. Each battle has a seed: the same seed and the same moves give the same battle.</p>
+    <p>Version 0.5. Build your squad in the Legion Viewer (<b>Arena squad</b>); the computer drafts three heroes near your level from the legions kept in this browser, with random skills, and plays them. Heroes fight with what they wear: the chain's gear, or what you put on them from the icons around the portrait of their card. Without a weapon or armour a hero fights with the Squire weapon of its class and Medium armour, on loan.</p>
+    <p>Skills from the patch notes up to 2.8.2 and, where they leave a gap, the game client's own texts; icons and scenes from the game. Traits from the class pages, pet bonuses from the game's list. Stats, accuracy, Speed and starting Initiative: Hubert's Dynamic Stat Calculator. Each battle has a seed: the same seed and the same moves give the same battle.</p>
   </footer>
 </main>
-<script type="module" src="app.js?v=7"></script>
+<script type="module" src="app.js?v=8"></script>
 </body>
 </html>

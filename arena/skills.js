@@ -5,7 +5,7 @@
    channel: Initiative the hero must gather before the skill resolves. Stat scores (STR.S...) are in percent points.
    Each skill's run(c, target) uses the battle context from combat.js. "note" lists what is not simulated yet. */
 
-import { MORE } from './skills-more.js?v=1';
+import { MORE } from './skills-more.js?v=2';
 
 const sk = (cls, o) => ({ cls, id: `${cls}.${o.key}`, target: 'enemy', reach: 3, amnesia: 0, channel: 0, magic: false, ...o });
 const bleed = { key: 'bleed', label: 'Bleed', tag: 'BLEED', turns: 3, stackMax: 5 };

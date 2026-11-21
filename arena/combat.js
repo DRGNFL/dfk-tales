@@ -6,7 +6,7 @@
    the status glossary, the gear as it is on the chain. Where the sources leave a gap, the choice is marked ASSUMPTION. */
 import { ACT_AT, RETURN, dynamicStats, accuracy, focusOf, hitChance, defenceReduction, CRIT_MULT, BLOCK_BASE, targetable, startInitiative, codexBudget } from './engine.js?v=1';
 import { SQUIRE, MEDIUM_ARMOUR, SQUIRE_SHIELD, statsOf } from './rules.js?v=2';
-import { SKILLS, CLASS_SKILLS } from './skills.js?v=2';
+import { SKILLS, CLASS_SKILLS } from './skills.js?v=3';
 import { traitsOf } from './traits.js?v=2';
 import { weaponFromGear, armourFromGear, extraFromGear, weaponSetOf } from './gear.js?v=1';
 import { petInBattle } from './pets.js?v=1';
@@ -809,8 +809,8 @@ function strike(b, src, t, raw, opts = {}) {
   }
   return { hit: true, crit: r.crit, blocked: r.blocked, damage: dealt, target: t, events };
 }
-/* Basic attack hits: Gladiator, Furious Cleave, Sharpshooter's bonus; Wild Frenzy only on the hero's own Attack action. */
-function basicStrikes(b, f, t, { mult = 1, label = 'Attack', frenzy = false } = {}) {
+/* Basic attack hits: Gladiator, Furious Cleave, Sharpshooter's bonus; Wild Frenzy only on the hero's own Basic Attack. */
+function basicStrikes(b, f, t, { mult = 1, label = 'Basic Attack', frenzy = false } = {}) {
   const ev = [];
   let raw = attackOf(f) * mult;
   if (hasPassive(f, 'warrior.gladiator')) raw *= 1.10;
@@ -1041,7 +1041,7 @@ export function basicAttack(b, f, t) {
   b.seq++;
   const r = basicStrikes(b, f, t, { frenzy: true });
   f.lastSkill = 'basic'; f.lastBranch = null; f.history.push('basic');
-  return [{ type: 'skill', source: f.id, target: t.id, skill: 'Attack' }, ...r.events, ...postAction(b, f)];
+  return [{ type: 'skill', source: f.id, target: t.id, skill: 'Basic Attack', basic: true }, ...r.events, ...postAction(b, f)];
 }
 export const basicHitChance = (b, f, t) => hitChance(accOf(f, false, true), evasionOf(t));
 export function skillHitChance(b, f, s, t) {

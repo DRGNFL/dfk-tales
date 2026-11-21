@@ -1,17 +1,16 @@
 import { getAssetConfig } from 'https://esm.sh/@defikingdoms/game-sdk@0.1.0?deps=ethers@5.8.0';
 import {
-  HeroRenderer, HERO_ANIMATIONS, getHeroWeaponAnimationSet, weaponAnimation,
+  HeroRenderer, HERO_ANIMATIONS, getHeroWeaponAnimationSet, weaponAnimation, createAnimatedHeroCard,
 } from 'https://esm.sh/@defikingdoms/game-sdk@0.1.0/renderer?deps=ethers@5.8.0';
-import { mountWallet } from '../assets/session.js?v=1';
-import { readSquad, onSquadChange, setSkills, isComplete } from '../assets/squad.js?v=2';
-import { battleKit, heroLook, SLOTS, onArmoryChange } from '../assets/armory.js?v=1';
+import { mountWallet, readLegion } from '../assets/session.js?v=1';
+import { readSquad, onSquadChange, setSkills, isComplete } from '../assets/squad.js?v=3';
+import { heroLook, heroKey, onArmoryChange } from '../assets/armory.js?v=1';
+import { hookCardIcons } from '../assets/equip-ui.js?v=1';
 import { ACT_AT, makeRng, codexBudget } from './engine.js?v=1';
-import * as C from './combat.js?v=5';
-import { CLASS_SKILLS } from './skills.js?v=2';
-import * as AI from './ai.js?v=1';
+import * as C from './combat.js?v=6';
+import { CLASS_SKILLS } from './skills.js?v=3';
+import * as AI from './ai.js?v=2';
 import { traitsOf } from './traits.js?v=2';
-import { petInBattle } from './pets.js?v=1';
-import { SQUIRE } from './rules.js?v=2';
 import { svg, iconOf, imgOf, classImg, statusImg } from './icons.js?v=2';
 
 const $ = (s) => document.querySelector(s);
@@ -21,16 +20,56 @@ const fmt = (n) => Math.round(n).toLocaleString('en-US');
 const pct = (x) => `${(x * 100).toFixed(1)}%`;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const img = (src, cls) => { const i = document.createElement('img'); i.src = src; i.alt = ''; if (cls) i.className = cls; i.decoding = 'async'; return i; };
-/* Who plays the right team: the computer (default) or you. */
-const SIDE_KEY = 'dfk-tales:arena-right';
-const rightPlayer = () => { try { return localStorage.getItem(SIDE_KEY) === 'you' ? 'you' : 'ai'; } catch (e) { return 'ai'; } };
-function paintSwitch() { for (const b of document.querySelectorAll('#ai-switch button')) b.setAttribute('aria-pressed', String(b.dataset.v === rightPlayer())); }
-for (const b of document.querySelectorAll('#ai-switch button')) b.addEventListener('click', () => { try { localStorage.setItem(SIDE_KEY, b.dataset.v); } catch (e) { /* private mode */ } paintSwitch(); });
-paintSwitch();
+const store = { get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } } };
+const plain = (v) => JSON.parse(JSON.stringify(v, (k, x) => (typeof x === 'bigint' ? x.toString() : x)));
+const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const CODEX = (cls) => CLASS_SKILLS[String(cls).toLowerCase()];
+const TIER_OPENS = [0, 1, 3, 6, 10, 15]; // level at which each Codex tier opens (1 point per level, tier N costs N)
 mountWallet($('#wallet'));
 
+/* Battle state (declared first: the setup reads it). */
+let battle = null;
+let opponent = null;   // the computer's squad, kept for a rematch
+let scene = null;
+let pending = null;    // { skill } or { skill: null } for the Basic Attack
+let handId = null;     // the hero whose skills are on the action bar (always one of yours)
+let geo = { W: 0, H: 0, u: 0 };
+
+/* ================= scenes =================
+   Every scene of the game's hero cards: 55 x 52 pixel art, most of them animated GIFs, a few with a front layer
+   (grass, fog, snow) drawn over the heroes' feet. Our own scenes will go in SCENES with dir, w and h. */
 const BG = `${getAssetConfig().assetsBaseUrl}/hero-card/assets/images/hero/backgrounds/`;
-$('#field').style.setProperty('--scene', `url("${BG}colosseum.gif")`);
+const SCENES = [
+  { id: 'colosseum', name: 'Colosseum', base: 'colosseum.gif', group: 'card' },
+  { id: 'plains', name: 'Plains', base: 'plains.png', front: 'plains-front.gif', group: 'card' },
+  { id: 'forest', name: 'Forest', base: 'forest.gif', front: 'forest-front.png', group: 'card' },
+  { id: 'desert', name: 'Desert', base: 'desert.gif', front: 'desert-front.png', group: 'card' },
+  { id: 'swamp', name: 'Swamp', base: 'swamp.gif', front: 'swamp-front.png', group: 'card' },
+  { id: 'island', name: 'Island', base: 'island.gif', group: 'card' },
+  { id: 'mountains', name: 'Mountains', base: 'mountain.gif', group: 'card' },
+  { id: 'arctic', name: 'Arctic', base: 'arctic.gif', group: 'card' },
+  { id: 'city', name: 'City', base: 'city.gif', group: 'card' },
+  { id: 'fields', name: 'Golden Fields', base: 'plains-back.gif', group: 'back' },
+  { id: 'deepwood', name: 'Deep Forest', base: 'forest-back.gif', front: 'forest-front.gif', group: 'back' },
+  { id: 'dunes', name: 'Desert Night', base: 'desert-back.gif', group: 'back' },
+  { id: 'snowtown', name: 'Snow Town', base: 'city-back.gif', group: 'back' },
+  { id: 'peaks', name: 'Snow Peaks', base: 'arctic-back.gif', front: 'arctic-front.gif', group: 'back' },
+  { id: 'lake', name: 'Lilac Lake', base: 'island-back.gif', group: 'back' },
+  { id: 'cave', name: 'Cave Mouth', base: 'mountains-back.png', front: 'mountains-front.gif', group: 'back' },
+  { id: 'darkwood', name: 'Misty Woods', base: 'swamp-back.gif', front: 'swamp-front.gif', group: 'back' },
+  { id: 'mine', name: 'Mine', base: 'mining.gif', front: 'mining-front-gold.png', group: 'work' },
+  { id: 'farm', name: 'Farm', base: 'gardening.gif', front: 'gardening-front.gif', group: 'work' },
+  { id: 'woods', name: 'Woods', base: 'foraging.png', front: 'foraging-front.gif', group: 'work' },
+  { id: 'dock', name: 'Dock', base: 'fishing.gif', group: 'work' },
+];
+const SCENE_KEY = 'dfk-tales:arena-scene';
+const sceneChoice = () => store.get(SCENE_KEY) || 'colosseum';
+const sceneUrl = (sc, file) => `${sc.dir || BG}${file}`;
+function pickScene() {
+  const c = sceneChoice();
+  if (c === 'random') return SCENES[Math.floor(Math.random() * SCENES.length)];
+  return SCENES.find((x) => x.id === c) || SCENES[0];
+}
 
 /* ---------- tooltip ---------- */
 const tip = $('#tip');
@@ -48,166 +87,435 @@ function showTip(anchor, name, meta, text, why) {
 const hideTip = () => { tip.hidden = true; };
 const tipOn = (node, fn) => { node.addEventListener('mouseenter', () => fn()); node.addEventListener('focus', () => fn()); node.addEventListener('mouseleave', hideTip); node.addEventListener('blur', hideTip); };
 
-/* ================= setup: the squads and the Codex ================= */
-const skillsOf = (slot) => slot.skills || C.defaultLoadout(slot.hero);
-
-function renderSetup() {
-  const s = readSquad();
-  const cols = ['A', 'B'].map((team) => {
-    const col = el('div', `squad ${team.toLowerCase()}`);
-    const h2 = el('h2');
-    h2.append(el('span', null, team === 'A' ? 'Left team' : 'Right team'), el('span', null, `${s.teams[team].filter(Boolean).length} / 3`));
-    col.append(h2);
-    s.teams[team].forEach((slot, i) => col.append(sheet(team, i, slot)));
-    return col;
-  });
-  $('#squads').replaceChildren(...cols);
-  const ok = isComplete(s);
-  $('#btn-fight').disabled = !ok;
-  const n = ['A', 'B'].reduce((t, k) => t + s.teams[k].filter(Boolean).length, 0);
-  $('#status').textContent = ok ? `Level cap ${s.cap}. One skill per tier, then Fight.`
-    : n === 0 ? 'No squad yet: open the Legion Viewer and press Arena squad.'
-    : `${n} of 6 heroes${n === 6 ? ', but someone is above the level cap' : ''}. Finish the squad in the Legion Viewer.`;
+/* ================= the legions kept in this browser =================
+   The Legion Viewer keeps the last legions it read (IndexedDB). From there: what each hero wears on the chain,
+   the gear and pets it can be given, and the heroes the computer drafts from. */
+const GEAR_SLOTS = [
+  ['weapon1', 'weapon1Id', 'weapon'], ['weapon1Visage', 'weapon1VisageId', 'weapon'], ['weapon2', 'weapon2Id', 'weapon'], ['weapon2Visage', 'weapon2VisageId', 'weapon'],
+  ['offhand1', 'offhand1Id', 'accessory'], ['offhand1Visage', 'offhand1VisageId', 'accessory'], ['offhand2', 'offhand2Id', 'accessory'], ['offhand2Visage', 'offhand2VisageId', 'accessory'],
+  ['armor', 'armorId', 'armor'], ['armorVisage', 'armorVisageId', 'armor'], ['accessory', 'accessoryId', 'accessory'], ['accessoryVisage', 'accessoryVisageId', 'accessory'],
+];
+let legionsP = null;
+function keptLegions() {
+  if (!legionsP) {
+    legionsP = (async () => {
+      let index = [];
+      try { index = JSON.parse(store.get('dfk-tales:legions') || '[]'); } catch (e) { /* none */ }
+      const out = [];
+      for (const { key } of index) {
+        const at = String(key).indexOf(':');
+        const chainId = Number(String(key).slice(0, at)), addr = String(key).slice(at + 1);
+        const d = await readLegion(chainId, addr).catch(() => null);
+        if (d && Array.isArray(d.heroes)) out.push({ chainId, addr, heroes: d.heroes, gear: d.gear || [], pets: d.pets || [], byId: new Map(d.heroes.map((h) => [String(h.id), h])) });
+      }
+      return out;
+    })();
+  }
+  return legionsP;
+}
+async function legionOf(h) { return (await keptLegions()).find((L) => L.byId.has(String(h.id))) || null; }
+/* What the chain says the hero wears, and the pool of its legion for the slot pickers. */
+function chainOf(L, h) {
+  if (!L) return { chainGear: null, chainPet: null, pool: null };
+  if (!L.gearMap) L.gearMap = new Map(L.gear.map((e) => [`${e.kind === 'offhand' ? 'accessory' : e.kind}:${e.id}`, e]));
+  const fresh = L.byId.get(String(h.id)) || h;
+  const chainGear = {};
+  for (const [slot, idKey, contract] of GEAR_SLOTS) { const id = fresh.equipment && fresh.equipment[idKey]; chainGear[slot] = id ? L.gearMap.get(`${contract}:${id}`) || null : null; }
+  const chainPet = L.pets.find((p) => p.equippedTo && String(p.equippedTo) === String(h.id)) || null;
+  return { chainGear, chainPet, pool: { gear: L.gear, pets: L.pets } };
+}
+/* What the battle uses: weapon 1, offhand 1, armour, accessory, pet (the armory first, then the chain); the look for the rig. */
+function kitOf(h, ch) {
+  const look = heroLook(h, ch && ch.chainGear, ch && ch.chainPet);
+  const w = look.worn;
+  return { weapon: w.weapon1, offhand: w.offhand1, armor: w.armor, accessory: w.accessory, pet: w.pet, look: look.gear, cardHero: look.hero };
 }
 
-function sheet(team, i, slot) {
-  if (!slot) return el('div', 'sheet emptyslot', `P${i + 1} · empty`);
-  const h = slot.hero;
-  const box = el('div', 'sheet');
-  const head = el('div', 'sh-head');
-  const nb = el('b'); nb.append(img(classImg(h.class)), h.name);
-  head.append(nb, el('span', null, `P${i + 1} · ${cap(h.class)} / ${cap(h.subClass)} · Lv ${h.level}`));
-  box.append(head);
-  const desc = el('div', 'desc');
-  const say = (name, text) => { desc.replaceChildren(el('b', null, name), ` ${text || ''}`); };
+/* ================= setup: your squad, the card, the Codex ================= */
+const skillsOf = (slot) => slot.skills || C.defaultLoadout(slot.hero);
+let tab = 0;
+let said = null; // the Codex skill last read, kept across redraws
 
-  // What it wears (seven slots, as on its card), then its traits, all as small icons with a tooltip.
-  const line = el('div', 'sh-line');
-  const worn = heroLook(h).worn;
-  const set = getHeroWeaponAnimationSet(h, worn.weapon1 ? { weapon1: worn.weapon1 } : null);
-  for (const sl of SLOTS) {
-    const v = worn[sl.key];
-    const ic = el('span', `slotic${v ? ' on' : ''}${sl.kind === 'pet' ? ' pet' : ''}`);
-    if (v && v.image) { const im = document.createElement('img'); im.src = v.image; im.alt = ''; ic.append(im); } else ic.textContent = sl.kind === 'pet' ? (v ? '◆' : '◇') : '·';
-    let text = v ? v.name : sl.kind === 'weapon' && sl.key === 'weapon1' ? `${(SQUIRE[set] || SQUIRE['1H Sword']).name}, on loan` : sl.key === 'armor' ? 'Medium armour, on loan' : 'Empty';
-    if (v && sl.kind === 'pet') { const b = petInBattle(v).bonus; text = b ? `${v.name}: ${b.name} ${'★'.repeat(b.tier)}. ${b.text}` : `${v.name}: no combat bonus`; }
-    tipOn(ic, () => showTip(ic, sl.label, null, text));
-    line.append(ic);
+function renderSetup() {
+  if (battle) return;
+  const s = readSquad();
+  const mine = s.teams.A;
+  if (!mine[tab] && mine.some(Boolean)) tab = mine.findIndex(Boolean);
+  const ok = isComplete(s);
+  const n = mine.filter(Boolean).length;
+  $('#btn-fight').disabled = !ok;
+  $('#status').textContent = ok ? `Level cap ${s.cap}. One Codex skill per tier, then Fight: the AI drafts three heroes near your level and plays them.`
+    : n === 0 ? 'No squad yet: open the Legion Viewer and press Arena squad.'
+    : `${n} of 3 heroes${n === 3 ? `, but someone is above the level cap ${s.cap}` : ''}. Finish the squad in the Legion Viewer.`;
+  renderScenes();
+  renderTabs(s);
+  const slot = mine[tab];
+  $('#editor').hidden = !slot;
+  if (!slot) { destroyCard(); return; }
+  ensureCard(slot.hero);
+  renderCodex(slot, tab);
+}
+
+function renderScenes() {
+  const box = $('#scenes');
+  const cur = sceneChoice();
+  const sc = SCENES.find((x) => x.id === cur);
+  const lbl = el('span', 'lbl');
+  lbl.append('Arena', el('b', null, cur === 'random' ? 'Random' : sc ? sc.name : SCENES[0].name));
+  box.replaceChildren(lbl);
+  let group = null;
+  const choose = (id) => { store.set(SCENE_KEY, id); renderScenes(); };
+  for (const x of SCENES) {
+    if (group && x.group !== group) box.append(el('span', 'sc-sep'));
+    group = x.group;
+    const b = el('button', 'sc'); b.type = 'button'; b.title = x.name; b.setAttribute('aria-label', x.name);
+    b.style.backgroundImage = [x.front && `url("${sceneUrl(x, x.front)}")`, `url("${sceneUrl(x, x.base)}")`].filter(Boolean).join(', ');
+    b.setAttribute('aria-pressed', String(x.id === cur));
+    b.addEventListener('click', () => choose(x.id));
+    box.append(b);
   }
-  line.append(el('span', 'gap'));
+  box.append(el('span', 'sc-sep'));
+  const r = el('button', 'sc rnd', '?'); r.type = 'button'; r.title = 'Random: a different scene every battle';
+  r.setAttribute('aria-pressed', String(cur === 'random'));
+  r.addEventListener('click', () => choose('random'));
+  box.append(r);
+}
+
+function renderTabs(s) {
+  const box = $('#tabs');
+  box.replaceChildren();
+  s.teams.A.forEach((slot, i) => {
+    const over = slot && slot.hero.level > s.cap;
+    const b = el('button', `tab${slot ? '' : ' empty'}${over ? ' over' : ''}`); b.type = 'button';
+    b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(i === tab));
+    b.append(el('span', 'pp', `P${i + 1}`));
+    const info = el('span');
+    if (!slot) info.append(el('b', null, 'Empty'), el('small', null, 'add a hero in the Legion Viewer'));
+    else {
+      const h = slot.hero;
+      const nb = el('b'); nb.append(img(classImg(h.class)), h.name);
+      info.append(nb, el('small', null, `${cap(h.class)} · Lv ${h.level}${over ? ` > cap ${s.cap}` : ''}`));
+      const picks = el('span', 'picks');
+      const list = CODEX(h.class);
+      if (list) for (const id of skillsOf(slot)) { const sk = list.find((x) => x.id === id); const u = sk && imgOf(sk); if (u) { const im = img(u); im.title = sk.name; picks.append(im); } }
+      info.append(picks);
+    }
+    b.append(info);
+    b.addEventListener('click', () => { if (slot) { tab = i; said = null; renderSetup(); } });
+    box.append(b);
+  });
+}
+
+/* The hero's own card, open, with the seven slot icons that equip it. Rebuilt only when the hero or its gear changes. */
+let cardKey = null, cardHandle = null, cardRun = 0;
+async function ensureCard(h, force = false) {
+  const key = heroKey(h);
+  if (!force && key === cardKey && cardHandle) return;
+  destroyCard();
+  cardKey = key;
+  const run = ++cardRun;
+  const ch = chainOf(await legionOf(h), h);
+  if (run !== cardRun) return;
+  const kit = kitOf(h, ch);
+  const handle = createAnimatedHeroCard(revive(kit.cardHero), { flipOnClick: true, renderer: kit.look ? { gear: kit.look } : {} });
+  cardHandle = handle;
+  $('#cardbox').replaceChildren(handle.element);
+  const opts = { pool: () => ch.pool, chainGear: ch.chainGear, chainPet: ch.chainPet };
+  const hook = () => hookCardIcons(handle.element, h, opts);
+  if (!hook()) Promise.resolve(handle.ready).then(hook, hook);
+}
+function destroyCard() {
+  cardRun += 1;
+  if (cardHandle) { try { if (cardHandle.destroy) cardHandle.destroy(); } catch (e) { /* gone */ } cardHandle.element.remove(); }
+  cardHandle = null; cardKey = null;
+  $('#cardbox').replaceChildren();
+}
+
+/* The squad keeps heroes as JSON: the card wants its dates back as dates. */
+function revive(h) {
+  const out = { ...h };
+  for (const k of ['staminaFullAt', 'summonedAt', 'nextSummonAt']) if (out[k] != null && !(out[k] instanceof Date)) out[k] = new Date(out[k]);
+  return out;
+}
+
+const costOf = (sk, h) => `${Math.round(sk.mana[0] + sk.mana[1] * h.level)} MP${sk.ap ? ` · ${sk.ap} AP` : sk.apX ? ' · X AP' : ''}`;
+function metaOf(sk, h) {
+  if (sk.passive) return `${sk.branch} · tier ${sk.tier} · passive`;
+  return [`${sk.branch} · tier ${sk.tier}`, costOf(sk, h), sk.amnesia && `Amnesia ${sk.amnesia}`, sk.channel && `channel ${typeof sk.channel === 'function' ? '50 + 50·X' : sk.channel}`].filter(Boolean).join(' · ');
+}
+
+/* The Skill Codex: the class's three disciplines side by side, tiers 1 to 5 down; one skill per tier. */
+function renderCodex(slot, i) {
+  const h = slot.hero;
+  const box = $('#codex');
+  box.replaceChildren();
+  const { mainTiers, subPoints } = codexBudget(h.level);
+  const head = el('div', 'cx-head');
+  const nb = el('b'); nb.append(img(classImg(h.class)), h.name);
+  head.append(nb, el('span', null, `P${i + 1} · ${cap(h.class)} / ${cap(h.subClass)} · Lv ${h.level} · ${mainTiers} of 5 tiers open`));
+  box.append(head);
+
   const tr = traitsOf(h);
+  const line = el('div', 'cx-traits');
   const chip = (t, cls) => { const c = el('span', cls); const u = imgOf(t); if (u) c.append(img(u)); c.append(t.name); return c; };
   for (const t of tr.actives) { const c = chip(t, 'chip'); tipOn(c, () => showTip(c, t.name, 'Active trait · once per battle', t.text)); line.append(c); }
   for (const t of tr.passives) { const c = chip(t, 'chip dim'); tipOn(c, () => showTip(c, t.name, 'Passive trait', t.text)); line.append(c); }
   box.append(line);
 
-  // Codex: one skill per tier
-  const list = CLASS_SKILLS[String(h.class).toLowerCase()];
-  const { mainTiers, subPoints } = codexBudget(h.level);
-  if (!list) box.append(el('div', 'note', `No Codex for the ${cap(h.class)} yet: basic attack, traits and pet.`));
-  else {
-    const picks = skillsOf(slot).slice();
-    const codex = el('div', 'codex');
-    for (let tier = 1; tier <= 5; tier++) {
-      const row = el('div', `tier${tier > mainTiers ? ' locked' : ''}`);
-      row.append(el('em', null, `T${tier}`));
-      for (const sk of list.filter((x) => x.tier === tier)) {
-        const b = el('button', sk.passive ? 'pas' : null); b.type = 'button';
-        const u = imgOf(sk);
-        if (u) b.append(img(u)); else b.innerHTML = svg(iconOf(sk.id));
-        b.append(sk.name);
-        b.setAttribute('aria-pressed', String(picks.includes(sk.id)));
-        b.addEventListener('mouseenter', () => say(`${sk.name} · ${sk.branch}${sk.passive ? ' · passive' : ` · ${Math.round(sk.mana[0] + sk.mana[1] * h.level)} MP${sk.ap ? ` · ${sk.ap} AP` : sk.apX ? ' · X AP' : ''}${sk.amnesia ? ` · Amnesia ${sk.amnesia}` : ''}${sk.channel ? ` · channel ${typeof sk.channel === 'function' ? '50 + 50·X' : sk.channel}` : ''}`}`, sk.text + (sk.note ? ` (${sk.note})` : '')));
-        b.addEventListener('click', () => {
-          const next = picks.filter((id) => !list.some((x) => x.id === id && x.tier === tier));
-          next.push(sk.id);
-          setSkills(team, i, next);
-        });
-        row.append(b);
-      }
-      codex.append(row);
+  const list = CODEX(h.class);
+  if (!list) { box.append(el('div', 'note', `The game never gave the ${cap(h.class)} a Skill Codex: it fights with Basic Attack, traits, pet and gear.`)); return; }
+  const picks = skillsOf(slot).slice();
+  const desc = el('div', 'cx-desc');
+  const idle = () => { said = null; desc.replaceChildren(el('span', 'nt', 'Hover a skill to read it. One skill per tier; each tier opens at its level.')); };
+  const say = (sk) => {
+    said = sk.id;
+    desc.replaceChildren(el('b', null, sk.name), el('small', null, metaOf(sk, h)), sk.text);
+    if (sk.note) desc.append(el('span', 'nt', sk.note));
+  };
+  const disciplines = [...new Set(list.filter((x) => x.tier === 1).map((x) => x.branch))];
+  for (const x of list) if (!disciplines.includes(x.branch)) disciplines.push(x.branch);
+  const grid = el('div', 'cx-grid');
+  grid.append(el('span'));
+  for (const d of disciplines) grid.append(el('div', 'disc', d));
+  for (let t = 1; t <= 5; t++) {
+    const locked = t > mainTiers;
+    const tl = el('div', `tl${locked ? ' locked' : ''}`);
+    tl.append(`T${t}`, el('small', null, locked ? `Lv ${TIER_OPENS[t]}` : `${t} pt${t > 1 ? 's' : ''}`));
+    grid.append(tl);
+    for (const d of disciplines) {
+      const sk = list.find((x) => x.tier === t && x.branch === d);
+      if (!sk) { grid.append(el('span')); continue; }
+      const b = el('button', `node t${t}${sk.passive ? ' pas' : ''}${locked ? ' locked' : ''}`); b.type = 'button';
+      const ic = el('span', 'ic');
+      const u = imgOf(sk);
+      if (u) ic.append(img(u)); else ic.innerHTML = svg(iconOf(sk.id));
+      const tx = el('span');
+      tx.append(el('span', 'nm', sk.name), el('span', 'mt', sk.passive ? 'Passive' : costOf(sk, h)));
+      b.append(ic, tx);
+      b.setAttribute('aria-pressed', String(picks.includes(sk.id)));
+      b.addEventListener('mouseenter', () => say(sk));
+      b.addEventListener('focus', () => say(sk));
+      b.addEventListener('click', () => {
+        said = sk.id;
+        const next = picks.filter((id) => !list.some((x) => x.id === id && x.tier === t));
+        next.push(sk.id);
+        setSkills('A', i, next);
+      });
+      grid.append(b);
     }
-    box.append(codex, desc);
-    if (subPoints) box.append(el('div', 'note', `+${subPoints} ${cap(h.subClass)} points: the subclass Codex comes with the second weapon.`));
   }
-  return box;
+  grid.addEventListener('mouseleave', idle);
+  box.append(grid, desc);
+  const again = said && list.find((x) => x.id === said);
+  if (again) say(again); else idle();
+  if (subPoints) box.append(el('div', 'note', `+${subPoints} ${cap(h.subClass)} points: the subclass Codex comes with the second weapon.`));
 }
-onSquadChange(() => { if (!battle) renderSetup(); });
-onArmoryChange(() => { if (!battle) renderSetup(); });
+
+onSquadChange(() => renderSetup());
+onArmoryChange(() => { if (battle) return; const s = readSquad(); const slot = s.teams.A[tab]; if (slot) ensureCard(slot.hero, true); renderSetup(); });
 renderSetup();
 
-/* ================= battle ================= */
-/* One field: the game's colosseum, doubled and mirrored into a wide arena. Heroes stand on the scene's ground row
-   (row 48 of 52, as on the game's card): left team P3 P2 P1 facing right, right team P1 P2 P3 facing left. */
-const SLOT_X = { A: { 3: 8, 2: 21.5, 1: 35 }, B: { 1: 65, 2: 78.5, 3: 92 } };
-const TICK_MS = 45;
-/* Hero size: the rig canvas is as tall as the field; at zoom 1.05 the hero stands about 42% of it (Hero Viewer: 50%).
-   The head, for the portraits: the hero is 0.404·zoom of the canvas tall with the feet at 93%; the head is its top fifth. */
-const ZOOM = 1.05;
-const HEAD = { x: 0.5, cy: 0.93 - 0.404 * ZOOM * 0.81, size: 0.404 * ZOOM * 0.42 };
-let battle = null;
-let pending = null; // { skill } or { skill: null } for the basic attack
+/* ================= the computer's squad =================
+   Three random heroes of the eight Codex classes, at or under the cap and near your average level, from the legions
+   kept in this browser (yours first of all); different classes when it can; one random skill per open tier.
+   When there is nobody to draft, a mirror match: your own heroes, with random skills. */
+function randomSkills(h) {
+  const list = CODEX(h.class);
+  if (!list) return [];
+  const { mainTiers } = codexBudget(h.level);
+  const out = [];
+  for (let t = 1; t <= mainTiers; t++) { const o = list.filter((s) => s.tier === t); if (o.length) out.push(o[Math.floor(Math.random() * o.length)].id); }
+  return out;
+}
+async function draftOpponent(s) {
+  const legions = await keptLegions();
+  const mine = s.teams.A.filter(Boolean).map((x) => x.hero);
+  const mineIds = new Set(mine.map((h) => String(h.id)));
+  const avg = mine.reduce((t, h) => t + h.level, 0) / mine.length;
+  const seen = new Set(), pool = [];
+  for (const L of legions) for (const h of L.heroes) {
+    const id = String(h.id);
+    if (seen.has(id) || mineIds.has(id)) continue;
+    seen.add(id);
+    if (!CODEX(h.class) || !(h.level <= s.cap) || !h.stats) continue;
+    pool.push({ h, L });
+  }
+  let near = pool;
+  for (const d of [1, 2, 3, 5]) { const n = pool.filter((x) => Math.abs(x.h.level - avg) <= d); if (n.length >= 8) { near = n; break; } }
+  if (near.length >= 3) {
+    shuffle(near);
+    const picks = [], classes = new Set();
+    for (const x of near) { if (picks.length === 3) break; if (!classes.has(x.h.class)) { picks.push(x); classes.add(x.h.class); } }
+    for (const x of near) { if (picks.length === 3) break; if (!picks.includes(x)) picks.push(x); }
+    return { mirror: false, heroes: picks.map(({ h, L }) => { const hero = plain(h); return { hero, ch: chainOf(L, hero), skills: randomSkills(hero) }; }) };
+  }
+  const heroes = [];
+  for (const h of shuffle(mine.slice())) {
+    const ch = chainOf(await legionOf(h), h);
+    const hero = { ...plain(h), id: `${h.id}m` };
+    heroes.push({ hero, ch, skills: randomSkills(hero) });
+  }
+  return { mirror: true, heroes };
+}
 
-$('#btn-fight').addEventListener('click', () => startBattle());
-$('#btn-new').addEventListener('click', () => { stopBattle(); $('#battle').hidden = true; $('#setup').hidden = false; renderSetup(); });
-$('#btn-rematch').addEventListener('click', () => { stopBattle(); startBattle(); });
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && battle && battle.turn && !battle.busy) setPending(battle.turn, null); });
+/* ================= battle ================= */
+/* The rig draws the feet at 93% of its canvas; the scenes' ground is row 48 of 52. Heroes stand in units of --u
+   (the field's height, or its width / 2.25 on narrow screens): P1 0.31 u from the centre, P2 0.63, P3 0.95
+   (left team P3 P2 P1 facing right, right team P1 P2 P3 facing left). */
+const FEET = 0.93, GROUND = 48 / 52;
+const DX = { 1: 0.31, 2: 0.63, 3: 0.95 };
+const TICK_MS = 45;
+/* Hero size: at zoom 0.72 the hero stands about 29% of --u (0.5: smaller than in 0.4, with more room around, on a field as big as the window).
+   The head, for the portraits: the hero is 0.404·zoom of the canvas tall with the feet at 93%; the head is its top fifth. */
+const ZOOM = 0.72;
+const HEAD = { x: 0.5, cy: 0.93 - 0.404 * ZOOM * 0.81, size: 0.404 * ZOOM * 0.42 };
+
+async function fight(fresh) {
+  const s = readSquad();
+  if (!isComplete(s)) return;
+  if (fresh || !opponent) {
+    $('#btn-fight').disabled = true;
+    $('#status').textContent = 'The AI is drafting its squad…';
+    try { opponent = await draftOpponent(s); } catch (e) { console.error(e); opponent = null; }
+    $('#btn-fight').disabled = false;
+    if (!opponent || opponent.heroes.length < 3) { $('#status').textContent = 'The AI found nobody to draft. Open a legion in the Legion Viewer first.'; return; }
+  }
+  await startBattle(s);
+}
+$('#btn-fight').addEventListener('click', () => fight(true));
+$('#btn-back').addEventListener('click', () => {
+  stopBattle();
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  document.body.classList.remove('in-battle');
+  $('#battle').hidden = true; $('#setup').hidden = false;
+  renderSetup();
+});
+$('#btn-rematch').addEventListener('click', () => { stopBattle(); fight(false); });
+$('#btn-next').addEventListener('click', () => { stopBattle(); fight(true); });
+$('#btn-full').addEventListener('click', () => {
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
+});
+$('#log-toggle').addEventListener('click', () => {
+  const closed = $('#logbox').classList.toggle('closed');
+  $('#log-arrow').textContent = closed ? '▸' : '▾';
+  store.set('dfk-tales:arena-log', closed ? 'closed' : 'open');
+});
+if (store.get('dfk-tales:arena-log') === 'closed') { $('#logbox').classList.add('closed'); $('#log-arrow').textContent = '▸'; }
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || !battle || !battle.live || battle.busy) return;
+  showHand(battle.live, true); setPending(battle.live, null); turnLine(battle.live);
+});
+new ResizeObserver(() => { if (battle) layoutField(); }).observe($('#field'));
 
 function stopBattle() {
   if (!battle) return;
   battle.stopped = true;
   battle.fighters.forEach((f) => f.renderer && f.renderer.destroy && f.renderer.destroy());
-  battle = null;
+  battle = null; pending = null; handId = null;
+  hideTip();
 }
 
-function startBattle() {
-  const s = readSquad();
-  if (!isComplete(s)) return;
+async function startBattle(s) {
+  const mineLegions = await Promise.all(s.teams.A.map((slot) => legionOf(slot.hero)));
   const heroes = { A: [], B: [] }, loadouts = {}, looks = {};
-  for (const team of ['A', 'B']) for (const slot of s.teams[team]) {
-    const kit = battleKit(slot.hero);
-    const h = { ...slot.hero, __weaponSet: getHeroWeaponAnimationSet(slot.hero, kit.weapon ? { weapon1: kit.weapon } : null) };
+  const add = (team, hero, ch, skills) => {
+    const kit = kitOf(hero, ch);
+    const h = { ...hero, __weaponSet: getHeroWeaponAnimationSet(hero, kit.weapon ? { weapon1: kit.weapon } : null) };
     heroes[team].push(h);
-    loadouts[String(h.id)] = { skills: skillsOf(slot), weapon: kit.weapon, armor: kit.armor, offhand: kit.offhand, accessory: kit.accessory, pet: kit.pet };
+    loadouts[String(h.id)] = { skills, weapon: kit.weapon, armor: kit.armor, offhand: kit.offhand, accessory: kit.accessory, pet: kit.pet };
     looks[String(h.id)] = kit.look;
-  }
+  };
+  s.teams.A.forEach((slot, i) => add('A', slot.hero, chainOf(mineLegions[i], slot.hero), skillsOf(slot)));
+  for (const o of opponent.heroes) add('B', o.hero, o.ch, o.skills);
   const seed = (Date.now() ^ (Math.random() * 0x7fffffff)) >>> 0;
   const b = C.createBattle({ heroes, rng: makeRng(seed), loadouts });
-  Object.assign(b, { seed, stopped: false, turn: null, busy: false, cap: s.cap, ai: { A: false, B: rightPlayer() === 'ai' } });
+  Object.assign(b, { seed, stopped: false, turn: null, live: null, busy: false, cap: s.cap, ai: { A: false, B: true } });
   battle = b;
+  scene = pickScene();
+  destroyCard();
+  document.body.classList.add('in-battle');
   $('#setup').hidden = true; $('#battle').hidden = false;
-  $('#btn-rematch').hidden = true;
-  $('#b-eyebrow').textContent = `Level cap ${s.cap} · average level ${b.avgLvl.toFixed(1)} · right team: ${b.ai.B ? 'AI' : 'you'} · seed ${seed}`;
-  $('#log').replaceChildren();
-  log(`Battle starts. Seed ${seed}.`, 'sys');
+  $('#btn-rematch').hidden = true; $('#btn-next').hidden = true; $('#result').hidden = true; $('#groups').hidden = false;
+  $('#b-eyebrow').textContent = `Level cap ${s.cap} · average level ${b.avgLvl.toFixed(1)} · ${scene.name} · seed ${seed}`;
+  $('#log').replaceChildren(); endLogGroup();
+  log(`Battle starts in the ${scene.name}. Seed ${seed}.`, 'sys');
+  log(opponent.mirror ? 'No other heroes kept in this browser: a mirror match against your own squad.'
+    : `The AI drafted ${opponent.heroes.map((o) => `${o.hero.name} (${cap(o.hero.class)} ${o.hero.level})`).join(', ')}.`, 'sys');
   b.fighters.filter((f) => f.luckyStart).forEach((f) => log(`${f.name} starts lucky: triple Initiative.`, 'sys'));
-  buildField(looks); buildPlates(); buildTimebar(); clearHand(); paint();
-  $('#field').scrollIntoView({ block: 'start', behavior: 'smooth' });
+  buildField(looks); buildPlates(); buildTimebar();
+  layoutField();
+  turnLine(null);
+  showHand(C.teamOf(b, 'A')[0], false);
+  paint();
   runLoop();
 }
 
 const byId = (id) => battle.fighters.find((f) => f.id === id);
 const nameOf = (id) => { const f = id && byId(id); return f ? f.name : '?'; };
 
+/* ---------- the field ---------- */
 function buildField(looks) {
   const field = $('#field');
+  const front = $('#scene-front');
   field.querySelectorAll('.ftr').forEach((n) => n.remove());
   for (const f of battle.fighters) {
-    const node = el('div', `ftr ${f.team.toLowerCase()}`);
+    const node = el('div', `ftr ${f.team.toLowerCase()}${f.team === 'A' ? ' mine' : ''}`);
     const canvas = el('canvas');
     const body = el('button', 'body'); body.type = 'button'; body.setAttribute('aria-label', f.name);
     node.append(canvas, el('span', 'chance'), body);
     body.addEventListener('click', () => onFighterClick(f));
-    tipOn(body, () => showTip(body, f.name, `${cap(f.hero.class)} · Lv ${f.level} · ${fmt(f.hp)} / ${fmt(f.hpMax)} HP`, null));
+    tipOn(body, () => { if (battle) showTip(body, f.name, `${cap(f.hero.class)} · Lv ${f.level} · ${fmt(f.hp)} / ${fmt(f.hpMax)} HP`, f.team === 'A' && !node.classList.contains('can') ? 'Click to see its skills.' : null); });
     f.node = node; f.canvas = canvas;
-    field.append(node);
+    field.insertBefore(node, front);
     f.idle = weaponAnimation(f.weaponSet, 'Idle');
     const look = looks[String(f.hero.id)];
     f.renderer = new HeroRenderer(canvas, f.hero, { animation: f.idle, mix: 0.12, zoom: ZOOM, ...(look ? { gear: look } : {}), onEvent: (ev) => { if (ev.name === 'hit' && f.onHit) { const fn = f.onHit; f.onHit = null; fn(); } } });
   }
+}
+/* Size everything to the field: the scene tiles, --u, the heroes' places. */
+function layoutField() {
+  const field = $('#field');
+  const W = field.clientWidth, H = field.clientHeight;
+  if (!W || !H) return;
+  geo = { W, H, u: Math.min(H, W / 2.25) };
+  field.style.setProperty('--u', `${geo.u}px`);
+  tileScene();
   place();
 }
-function place() { for (const f of battle.fighters) f.node.style.left = `${SLOT_X[f.team][f.pos] - 6}%`; }
+function tileScene() {
+  const { W, H } = geo;
+  for (const [id, file] of [['#scene-back', scene && scene.base], ['#scene-front', scene && scene.front]]) {
+    const box = $(id);
+    box.replaceChildren();
+    if (!file) continue;
+    const url = `url("${sceneUrl(scene, file)}")`;
+    const tw = H * (scene.w || 55) / (scene.h || 52);
+    const cx = W / 2;
+    // The game's square scenes meet in the middle (a seam between the scene and its mirror); a wide scene of ours sits in the middle.
+    const off = scene.w > 2 * (scene.h || 52) ? -0.5 : 0;
+    const k0 = Math.floor(-cx / tw - off) - 1, k1 = Math.ceil((W - cx) / tw - off) + 1;
+    for (let k = k0; k <= k1; k++) {
+      const x = cx + (k + off) * tw;
+      const odd = ((k % 2) + 2) % 2 === 1;
+      const tile = el('i', (off ? odd : !odd) ? 'm' : null);
+      tile.style.left = `${Math.floor(x)}px`;
+      tile.style.width = `${Math.ceil(tw) + 1}px`;
+      tile.style.backgroundImage = url;
+      box.append(tile);
+    }
+  }
+}
+function place() {
+  if (!battle) return;
+  const { W, H, u } = geo;
+  const top = H * GROUND - FEET * u;
+  for (const f of battle.fighters) {
+    const x = W / 2 + (f.team === 'A' ? -1 : 1) * DX[f.pos] * u;
+    const st = f.node.style;
+    st.left = `${x - u / 2}px`; st.top = `${top}px`; st.width = `${u}px`; st.height = `${u}px`;
+  }
+}
 
 /* Copy the head out of the hero's own canvas: live portraits for the plates and the timebar. */
 function drawHead(f, target) {
@@ -238,7 +546,7 @@ function buildPlates() {
     info.append(el('div', 'tags'));
     p.append(pt, info);
     p.addEventListener('click', () => onFighterClick(f));
-    tipOn(p, () => { const sh = C.sheet(battle, f); showTip(p, f.name, `${cap(f.hero.class)} · Lv ${f.level} · P${f.pos} · ${f.weapon.name}${f.weapon.loaned ? ' (loaned)' : ''}`, `HP ${fmt(f.hp)} / ${fmt(f.hpMax)} · MP ${fmt(f.mp)} / ${fmt(f.mpMax)}${f.cls === 'wizard' ? ` · Arcane Power ${f.ap} / ${C.AP_MAX}` : ''} · ATK ${fmt(sh.attack)} · SPELL ${fmt(sh.spell)} · P.DEF ${fmt(sh.pdef)} · M.DEF ${fmt(sh.mdef)} · EVA ${pct(sh.evasion)} · CRIT ${pct(sh.crit)} · Speed ${sh.speed.toFixed(1)}`, C.tags(f).map((t) => t.name).join(' · ') || null); });
+    tipOn(p, () => { if (!battle) return; const sh = C.sheet(battle, f); showTip(p, f.name, `${cap(f.hero.class)} · Lv ${f.level} · P${f.pos} · ${f.weapon.name}${f.weapon.loaned ? ' (loaned)' : ''}`, `HP ${fmt(f.hp)} / ${fmt(f.hpMax)} · MP ${fmt(f.mp)} / ${fmt(f.mpMax)}${f.cls === 'wizard' ? ` · Arcane Power ${f.ap} / ${C.AP_MAX}` : ''} · ATK ${fmt(sh.attack)} · SPELL ${fmt(sh.spell)} · P.DEF ${fmt(sh.pdef)} · M.DEF ${fmt(sh.mdef)} · EVA ${pct(sh.evasion)} · CRIT ${pct(sh.crit)} · Speed ${sh.speed.toFixed(1)}`, C.tags(f).map((t) => t.name).join(' · ') || null); });
     f.plate = p; f.portrait = pc;
     $(`#side-${f.team.toLowerCase()}`).append(p);
   }
@@ -252,19 +560,20 @@ function setBar(node, cls, v, max, extra) {
 }
 
 function buildTimebar() {
-  const bar2 = $('#timebar');
-  bar2.querySelectorAll('.mk').forEach((m) => m.remove());
+  const tb = $('#timebar');
+  tb.querySelectorAll('.mk').forEach((m) => m.remove());
   for (const f of battle.fighters) {
     const m = el('div', `mk ${f.team.toLowerCase()}`);
     const c = el('canvas'); c.width = 34; c.height = 34; m.append(c);
     m.title = f.name;
     f.marker = m; f.markerCanvas = c;
-    bar2.append(m);
+    tb.append(m);
   }
 }
 
 function paint() {
   const b = battle;
+  if (!b) return;
   const turnId = b.turn && b.turn.id;
   for (const f of b.fighters) {
     const goal = f.channel ? f.channel.need : ACT_AT;
@@ -272,8 +581,9 @@ function paint() {
     f.marker.classList.toggle('down', !f.alive);
     f.marker.classList.toggle('turn', f.id === turnId);
     f.marker.classList.toggle('ch', !!f.channel);
-    f.marker.title = f.channel ? `${f.name} · channelling ${f.channel.skill.name}` : f.name;
+    f.marker.title = f.channel && f.team === 'A' ? `${f.name} · channelling ${f.channel.skill.name}` : f.channel ? `${f.name} · channelling` : f.name;
     for (const n of [f.node, f.plate]) { n.classList.toggle('turn', f.id === turnId); n.classList.toggle('down', !f.alive); }
+    f.plate.classList.toggle('shown', f.id === handId);
     f.plate.style.order = f.pos;
     const barrier = f.fx.find((e) => e.key === 'barrier');
     setBar(f.plate, 'hp', f.hp, f.hpMax, barrier ? barrier.value : 0);
@@ -297,12 +607,28 @@ function tagNode(t) {
   if (t.stacks) n.append(el('b', null, String(t.stacks)));
   return n;
 }
-function log(text, cls) { $('#log').prepend(el('li', cls || null, text)); }
+/* The battle log, newest action on top; inside an action, the headline first and what it did under it.
+   side: 'A' (yours) or 'B' (the AI) marks who acted. */
+let logGroup = null;
+function log(text, cls, side) {
+  const li = el('li', [cls, side === 'A' ? 'ally' : side === 'B' ? 'foe' : null].filter(Boolean).join(' ') || null, text);
+  const ul = $('#log');
+  if (cls === 'hit' && side) {
+    logGroup = el('li', 'grp');
+    const inner = el('ul');
+    inner.append(li);
+    logGroup.append(inner);
+    ul.prepend(logGroup);
+  } else if (logGroup && cls !== 'sys') logGroup.firstChild.append(li);
+  else ul.prepend(li);
+  while (ul.children.length > 120) ul.lastChild.remove();
+}
+const endLogGroup = () => { logGroup = null; };
 function floatText(f, text, cls, n = 0) {
   const s = el('span', `float${cls ? ` ${cls}` : ''}`, text);
-  s.style.marginTop = `${-n * 3}%`;
+  s.style.marginTop = `calc(var(--u) * ${(-n * 0.058).toFixed(3)})`;
   f.node.append(s);
-  setTimeout(() => s.remove(), 1300);
+  setTimeout(() => s.remove(), 1400);
 }
 const playAnim = (f, anim, loop) => { const list = f.renderer.animations; if (list.length && !list.includes(anim)) anim = f.idle; return f.renderer.play(anim, { loop }).catch(() => {}); };
 const hasAnim = (f, a) => !!a && f.renderer.animations.includes(a);
@@ -315,13 +641,18 @@ function showEvents(events) {
   const bump = (id) => (n[id] = (n[id] || 0) + 1) - 1;
   for (const e of events) {
     const t = e.target && byId(e.target);
-    if (e.type === 'skill') { if (e.skill !== 'Attack') log(`${nameOf(e.source)}: ${e.skill}${e.target ? ` → ${nameOf(e.target)}` : ''}`, 'hit'); if (e.delayed && byId(e.source)) floatText(byId(e.source), e.skill.replace(' (delayed)', ''), 'st good', bump(e.source)); continue; }
+    if (e.type === 'skill') {
+      const src = byId(e.source);
+      log(`${nameOf(e.source)}: ${e.skill}${e.target ? ` → ${nameOf(e.target)}` : ''}`, 'hit', src && src.team);
+      if (e.delayed && src) floatText(src, e.skill.replace(' (delayed)', ''), 'st good', bump(e.source));
+      continue;
+    }
     if (e.type === 'damage') {
       if (e.amount === 0 && e.absorbed > 0) floatText(t, `(${e.absorbed})`, 'abs', bump(t.id));
       else floatText(t, `${e.amount}${e.crit ? '!' : ''}`, e.crit ? 'crit' : null, bump(t.id));
       if (t.alive && e.amount > 0) { playAnim(t, HERO_ANIMATIONS.hurt, false); setTimeout(() => t.alive && !b.stopped && playAnim(t, t.idle, true), 700); }
       const bits = [e.crit && 'critical', e.blocked && 'blocked', e.absorbed && `${e.absorbed} absorbed`, e.chance != null && `${Math.round(e.chance * 100)}%`].filter(Boolean);
-      log(`${e.label ? `${e.label} ` : ''}→ ${t.name} −${e.amount}${bits.length ? ` (${bits.join(', ')})` : ''}`, 'sub hit');
+      log(`${e.label ? `${e.label} ` : ''}→ ${t.name} −${e.amount}${bits.length ? ` (${bits.join(', ')})` : ''}`, 'sub');
     } else if (e.type === 'miss') { floatText(t, 'MISS', 'miss', bump(t.id)); log(`${e.label ? `${e.label} ` : ''}→ ${t.name} miss (${Math.round(e.chance * 100)}%)`, 'sub'); }
     else if (e.type === 'heal') { if (e.amount > 0) floatText(t, `+${e.amount}${e.crit ? '!' : ''}`, 'heal', bump(t.id)); log(`${e.label}: ${t.name} +${e.amount}${e.crit ? ' (critical)' : ''}`, 'sub'); }
     else if (e.type === 'status') { if (e.tag && t) floatText(t, e.tag, `st${/resist|Unstoppable|BARRIER|SHIELD|GUARD|MIGHT|SWIFT|BEACON|HASTE|IRON|CRIT|BOND|HARDENED|LAST|SKIN/.test(e.tag + e.text) ? ' good' : ''}`, bump(t.id)); log(e.text, 'sub'); }
@@ -334,7 +665,7 @@ function showEvents(events) {
     }
     else if (e.type === 'move') { place(); log(e.text, 'sub'); }
     else if (e.type === 'ap') { if (e.amount >= 3) floatText(t, `+${e.amount} AP`, 'st good', bump(t.id)); log(e.text, 'sub'); }
-    else if (e.type === 'channel') log(e.text, 'hit');
+    else if (e.type === 'channel') { const src = byId(e.source || e.target); log(e.text, 'hit', src && src.team); }
   }
 }
 
@@ -371,24 +702,25 @@ async function runLoop() {
     const f = C.readyFighter(b);
     if (!f) {
       const ev = C.tickOnce(b);
-      if (ev.length) { showEvents(ev); if (ev.some((e) => e.type === 'revive')) await sleep(1000); }
+      if (ev.length) { endLogGroup(); showEvents(ev); if (ev.some((e) => e.type === 'revive')) await sleep(1000); }
       paint();
       await sleep(TICK_MS);
       continue;
     }
     if (f.channel) {
       const s = f.channel.skill;
-      b.turn = f; turnLine(f, `completes ${s.name}`); paint();
+      b.turn = f; b.live = null; turnLine(f, f.team === 'A' ? `completes ${s.name}` : 'completes a channel'); paint();
       const ev = C.completeChannel(b, f);
       await animate(f, ev, animFor(f, s));
       if (ev.some((e) => e.type === 'revive')) await sleep(1000);
-      b.turn = null; paint();
+      b.turn = null; refreshHand(); paint();
       continue;
     }
+    endLogGroup();
     const st = C.startTurn(b, f);
     if (st.events.length) { b.turn = f; showEvents(st.events); paint(); await sleep(550); }
     if (b.stopped || b.over) break;
-    if (st.lost) { await after(C.endTurn(b, f, 'lost')); b.turn = null; paint(); await sleep(250); continue; }
+    if (st.lost) { await after(C.endTurn(b, f, 'lost')); b.turn = null; refreshHand(); paint(); await sleep(250); continue; }
     const forced = C.forcedAction(b, f);
     if (forced) { forcedTurn(f, forced); return; }
     if (b.ai[f.team]) { aiTurn(f); return; }
@@ -398,75 +730,93 @@ async function runLoop() {
   if (b && b.over && !b.stopped) finish();
 }
 
+/* The line over the action bar: whose turn it is; when the bar already shows the hero waiting for you, only what a click does. */
 function turnLine(f, extra) {
   const t = $('#turnline');
   t.className = 'turnline';
-  t.replaceChildren('Turn · ', el('b', f.team === 'B' ? 'b' : null, f.name), extra ? ` · ${extra}` : '');
+  if (!f) { t.replaceChildren(); return; }
+  if (battle && battle.live === f && handId === f.id) { t.replaceChildren(extra || 'Click an enemy for a Basic Attack, or pick a skill'); return; }
+  t.replaceChildren(f.team === 'A' ? 'Your turn · ' : 'Enemy turn · ', el('b', f.team === 'B' ? 'b' : null, f.name), extra ? ` · ${extra}` : '');
+}
+
+/* ---------- the action bar: only your heroes, ever ---------- */
+/* The bar keeps showing a hero until you click another of yours or the turn passes to one of yours.
+   live: it is that hero's turn and it is waiting for you; otherwise the tiles are only there to read. */
+function showHand(f, live) {
+  handId = f ? f.id : null;
+  if (!f) { clearHand(); return; }
+  renderHand(f, live);
+  if (battle) for (const x of battle.fighters) x.plate.classList.toggle('shown', x.id === handId);
+}
+function refreshHand() {
+  const b = battle;
+  const f = b && handId && byId(handId);
+  if (!f) return;
+  renderHand(f, !!(b.live && b.live === f && !b.busy));
 }
 function clearHand() {
   hideTip();
   for (const id of ['#g-actions', '#g-skills', '#g-passives']) $(id).replaceChildren();
-  $('#turnline').replaceChildren();
+  $('#handline').replaceChildren();
 }
 
 /* A Berserk or Confused hero attacks on its own. */
 async function forcedTurn(f, act) {
   const b = battle;
-  b.turn = f; b.busy = false;
-  clearHand(); paint();
-  turnLine(f, `${act.why}: attacks ${act.target.name}`);
+  b.turn = f; b.live = null; b.busy = false;
+  if (f.team === 'A') showHand(f, false);
+  paint();
+  turnLine(f, `${act.why}: attacks on its own`);
   log(`${f.name} is ${act.why} and attacks on its own.`, 'sys');
   await sleep(600);
   if (b.stopped) return;
   doAttack(f, act.target);
 }
-/* The computer's turn: it shows its hand, thinks, marks the move, plays it. */
+/* The computer's turn: nothing of its hand shows. What it does goes to the battle log. */
 async function aiTurn(f) {
   const b = battle;
-  b.turn = f; b.busy = true;
+  b.turn = f; b.live = null; b.busy = true;
   paint();
   turnLine(f, 'thinking…');
-  renderHand(f);
-  $('.hud .mid').classList.add('ai');
-  await sleep(420);
+  refreshHand();
+  await sleep(480);
   if (b.stopped) return;
   const d = AI.decide(b, f);
-  const sel = d.kind === 'skill' ? `.tile[data-skill="${CSS.escape(d.skill.id)}"]` : d.kind === 'attack' ? '#g-actions .tile.primary' : '#g-actions .tile[data-act="pass"]';
-  const btn = document.querySelector(sel);
-  if (btn) btn.classList.add('pick');
-  if (d.target) for (const n of [d.target.node, d.target.plate]) n.classList.add('can');
-  turnLine(f, d.kind === 'pass' ? 'passes' : `${d.kind === 'skill' ? d.skill.name : 'Attack'}${d.target ? ` → ${d.target.name}` : ''}`);
-  await sleep(650);
-  $('.hud .mid').classList.remove('ai');
-  if (b.stopped) return;
+  turnLine(f);
   b.busy = false;
   if (d.kind === 'attack') doAttack(f, d.target);
   else if (d.kind === 'skill') doSkill(f, d.skill, d.target);
-  else { b.busy = true; clearTargets(); log(`${f.name} passes.`); finishAction(f, 'pass'); }
+  else { b.busy = true; log(`${f.name} passes.`, 'hit', f.team); finishAction(f, 'pass'); }
 }
 
 function offerTurn(f) {
   const b = battle;
-  b.turn = f; b.busy = false;
+  b.turn = f; b.live = f; b.busy = false;
   paint();
+  showHand(f, true);
   turnLine(f);
-  renderHand(f);
   setPending(f, null);
 }
 
-/* The action bar: Actions & abilities (attack, move, pass, active traits, pet skill), Skills (Codex), Passives. */
-function renderHand(f) {
+/* The action bar: Actions & abilities (Basic Attack, move, pass, active traits, pet skill), Skills (Codex), Passives. */
+function renderHand(f, live) {
   const b = battle;
   const A = $('#g-actions'), K = $('#g-skills'), P = $('#g-passives');
   hideTip();
   A.replaceChildren(); K.replaceChildren(); P.replaceChildren();
+  const groups = $('#groups');
+  groups.classList.toggle('view', !live);
+  groups.classList.remove('locked');
+  const hl = $('#handline');
+  hl.replaceChildren(img(classImg(f.cls)), el('span', null, f.name), el('em', live ? 'live' : null, live ? 'your move' : !f.alive ? 'down' : b.turn === f ? 'acting' : 'waiting'));
   const pad = (box) => { while (box.children.length % 4) box.append(el('span', 'tile empty')); };
+  const ok = (t) => live && !b.busy && !t.classList.contains('off');
 
-  // basic attack
+  // Basic Attack
   const atk = tile(f.weapon.magic ? 'staff' : f.weapon.kind === 'ranged' ? 'bow' : 'sword', 'primary');
-  tipOn(atk, () => showTip(atk, 'Attack', `${f.weapon.name} · ${f.weapon.kind}${f.weapon.reach === 2 ? ' · reach 2' : ''}`, f.weapon.kind === 'melee' ? 'Hits the first enemy standing (reach 2: one of the first two).' : 'Click the enemy to hit.'));
+  tipOn(atk, () => showTip(atk, 'Basic Attack', `${f.weapon.name} · ${f.weapon.kind}${f.weapon.reach === 2 ? ' · reach 2' : ''}`, f.weapon.kind === 'melee' ? 'Hits the first enemy standing (reach 2: one of the first two).' : 'Click the enemy to hit.'));
   atk.addEventListener('click', () => {
-    if (b.busy) return;
+    if (!ok(atk)) return;
     setPending(f, null);
     const ts = C.enemyTargets(b, f, { kind: f.weapon.kind, reach: f.weapon.reach });
     if (ts.length === 1) doAttack(f, ts[0]);
@@ -477,22 +827,21 @@ function renderHand(f) {
   for (const d of [-1, 1]) {
     const other = mates.find((m) => m.pos === f.pos + d);
     const t = tile(f.team === 'A' ? (d < 0 ? 'right' : 'left') : (d < 0 ? 'left' : 'right'));
-    if (!other || C.has(f, 'root')) t.disabled = true;
+    if (!other || C.has(f, 'root')) t.classList.add('off');
     tipOn(t, () => showTip(t, other ? `Move to P${other.pos}` : 'Move', other ? `Swap places with ${other.name}` : 'Nobody there', 'Gives back 250 Initiative.', C.has(f, 'root') ? 'Rooted' : null));
-    t.addEventListener('click', () => { if (b.busy || !other) return; b.busy = true; hideTip(); clearTargets(); showEvents(C.reposition(b, f, other)); place(); finishAction(f, 'reposition'); });
+    t.addEventListener('click', () => { if (!ok(t) || !other) return; b.busy = true; b.live = null; hideTip(); clearTargets(); lockHand(); showEvents(C.reposition(b, f, other)); place(); finishAction(f, 'reposition'); });
     A.append(t);
   }
   const pass = tile('pass');
-  pass.dataset.act = 'pass';
   tipOn(pass, () => showTip(pass, 'Pass', null, 'Gives back 400 Initiative.'));
-  pass.addEventListener('click', () => { if (b.busy) return; b.busy = true; hideTip(); clearTargets(); log(`${f.name} passes.`); finishAction(f, 'pass'); });
+  pass.addEventListener('click', () => { if (!ok(pass)) return; b.busy = true; b.live = null; hideTip(); clearTargets(); lockHand(); log(`${f.name} passes.`, 'hit', f.team); finishAction(f, 'pass'); });
   A.append(pass);
-  for (const s of f.traitActives) A.append(actTile(f, s, 'trait'));
-  if (f.petSkill) A.append(actTile(f, f.petSkill, 'pet'));
+  for (const s of f.traitActives) A.append(actTile(f, s, live, 'trait'));
+  if (f.petSkill) A.append(actTile(f, f.petSkill, live, 'pet'));
   pad(A);
 
-  for (const s of f.skills) K.append(actTile(f, s));
-  if (!CLASS_SKILLS[f.cls]) { const t = tile('ring', 'passive'); tipOn(t, () => showTip(t, `No Codex for the ${cap(f.cls)}`, null, 'The game never gave this class a Skill Codex: basic attack, traits, pet and gear.')); K.append(t); }
+  for (const s of f.skills) K.append(actTile(f, s, live));
+  if (!CODEX(f.cls)) { const t = tile('ring', 'passive'); tipOn(t, () => showTip(t, `No Codex for the ${cap(f.cls)}`, null, 'The game never gave this class a Skill Codex: Basic Attack, traits, pet and gear.')); K.append(t); }
   pad(K);
 
   if (f.cls === 'berserker') P.append(passiveTile({ id: 'berserker.momentOfClarity', cls: 'berserker', name: 'Moment of Clarity', img: '../assets/game/ability-icons/berserker/howl.png' }, 'Moment of Clarity', 'Berserker · always on', 'After an action that hurt allies: (4·STR.S + 4·LCK.S)% Berserker\'s Mark on a random enemy for 40 ticks; then, if an enemy has the Mark, Berserk for 30 ticks.'));
@@ -513,7 +862,7 @@ function passiveTile(icon, name, meta, text, tag) {
   tipOn(t, () => showTip(t, name, meta, text));
   return t;
 }
-function actTile(f, s, kind) {
+function actTile(f, s, live, kind) {
   const b = battle;
   const t = tile(s, kind || null);
   const blocked = C.skillBlocked(b, f, s);
@@ -524,13 +873,13 @@ function actTile(f, s, kind) {
   if (!s.trait) t.append(el('span', 'mp', s.ap ? `${C.manaCost(f, s)}·${s.ap}` : String(C.manaCost(f, s))));
   if (!s.trait && f.cd[s.id] > 0) t.append(el('span', 'cd', String(f.cd[s.id])));
   if (s.trait && f.used[s.id]) t.append(el('span', 'cd', '×'));
-  t.disabled = !!blocked || noTarget;
+  if (blocked || noTarget) t.classList.add('off');
   t.dataset.skill = s.id;
   const meta = [kind === 'trait' ? 'Active trait · once per battle' : kind === 'pet' ? `${f.pet.name} · pet skill · once per battle` : `${C.manaCost(f, s)} MP${s.ap ? ` · ${s.ap} AP` : s.apX ? ` · all AP up to 30 (now ${Math.min(30, f.ap)})` : ''}${s.amnesia ? ` · Amnesia ${s.amnesia}` : ''}`, s.channel && `channel ${typeof s.channel === 'function' ? C.channelOf(s, Math.min(30, f.ap)) : s.channel}`].filter(Boolean).join(' · ');
   const why = blocked || (noTarget ? (s.target === 'fallen' ? 'Nobody is down' : 'No target in reach') : null);
   tipOn(t, () => showTip(t, s.name, meta, `${s.text}${s.note ? ` (${s.note})` : ''}`, why));
   t.addEventListener('click', () => {
-    if (b.busy || t.disabled) return;
+    if (!live || b.busy || t.classList.contains('off')) return;
     hideTip();
     if (pending && pending.skill === s) { setPending(f, null); return; }
     if (!needs) { doSkill(f, s, null); return; }
@@ -541,11 +890,12 @@ function actTile(f, s, kind) {
 }
 
 function clearTargets() {
+  if (!battle) return;
   for (const x of battle.fighters) for (const n of [x.node, x.plate]) n.classList.remove('can', 'ally');
   for (const x of battle.fighters) x.node.querySelector('.chance').textContent = '';
   document.querySelectorAll('.tile.pick').forEach((n) => n.classList.remove('pick'));
 }
-/* What a click on a hero does now: the basic attack (default) or the chosen skill. */
+/* What a click on a hero does now: the Basic Attack (default) or the chosen skill. */
 function setPending(f, s) {
   const b = battle;
   clearTargets();
@@ -561,20 +911,28 @@ function setPending(f, s) {
   if (btn) btn.classList.add('pick');
   turnLine(f, s ? `${s.name}: pick ${s.target === 'enemy' ? 'an enemy' : s.target === 'fallen' ? 'a fallen ally' : 'an ally'}` : null);
 }
+/* A click on a hero: a target when you are aiming at it; otherwise, one of yours shows its skills. */
 function onFighterClick(t) {
   const b = battle;
-  const f = b && b.turn;
-  if (!f || b.busy || !t.node.classList.contains('can')) return;
-  if (pending && pending.skill) doSkill(f, pending.skill, t);
-  else doAttack(f, t);
+  if (!b || b.over) return;
+  const f = b.live;
+  if (f && !b.busy && handId === f.id && t.node.classList.contains('can')) {
+    if (pending && pending.skill) doSkill(f, pending.skill, t); else doAttack(f, t);
+    return;
+  }
+  if (t.team !== 'A') return;
+  if (f && t === f && !b.busy) { showHand(f, true); setPending(f, null); return; }
+  clearTargets(); pending = null;
+  showHand(t, false);
+  if (f) turnLine(f, `click ${f.name.split(' ')[0]} to act`);
 }
 
 async function doAttack(f, t) {
   const b = battle;
   if (b.busy) return;
-  b.busy = true; hideTip(); clearTargets(); lockHand();
+  b.busy = true; b.live = null; hideTip(); clearTargets(); lockHand();
+  turnLine(f, f.team === 'A' ? 'Basic Attack' : null);
   const events = C.basicAttack(b, f, t);
-  log(`${f.name} attacks ${t.name}`, 'hit');
   await animate(f, events, animFor(f, null));
   if (b.stopped) return;
   finishAction(f, 'action');
@@ -582,20 +940,26 @@ async function doAttack(f, t) {
 async function doSkill(f, s, t) {
   const b = battle;
   if (b.busy) return;
-  b.busy = true; hideTip(); clearTargets(); lockHand();
+  b.busy = true; b.live = null; hideTip(); clearTargets(); lockHand();
+  turnLine(f, f.team === 'A' ? s.name : null);
   const events = C.useSkill(b, f, s, t);
   await animate(f, events, animFor(f, s, s.channel ? 'channel' : null));
   if (b.stopped) return;
   finishAction(f, 'action', s);
 }
-function lockHand() { document.querySelectorAll('.tile').forEach((n) => { if (n.tagName === 'BUTTON') n.disabled = true; }); }
+function lockHand() {
+  $('#groups').classList.add('locked');
+  const em = $('#handline em');
+  if (em) { em.className = ''; em.textContent = 'acting'; }
+}
 async function finishAction(f, kind, s = null) {
   const b = battle;
   const ev = C.endTurn(b, f, kind, s);
-  b.turn = null;
-  clearHand();
+  b.turn = null; b.live = null;
+  refreshHand();
   paint();
   await after(ev);
+  endLogGroup();
   if (b.stopped) return;
   if (b.over) finish(); else runLoop();
 }
@@ -603,13 +967,18 @@ async function finishAction(f, kind, s = null) {
 function finish() {
   const b = battle;
   const w = b.winner;
-  b.turn = null;
+  b.turn = null; b.live = null;
   paint();
   clearHand();
   const t = $('#turnline');
   t.className = 'turnline result';
-  t.textContent = `${w === 'A' ? 'Left' : 'Right'} team wins`;
-  $('#btn-rematch').hidden = false;
-  log(`${w === 'A' ? 'Left' : 'Right'} team wins after ${b.tick} ticks.`, 'ko');
+  t.textContent = w === 'A' ? 'Your squad wins' : 'The AI wins';
+  const r = $('#result');
+  r.className = `banner${w === 'A' ? '' : ' lose'}`;
+  $('#groups').hidden = true;
+  r.querySelector('b').textContent = w === 'A' ? 'Victory' : 'Defeat';
+  r.hidden = false;
+  $('#btn-rematch').hidden = false; $('#btn-next').hidden = false;
+  log(`${w === 'A' ? 'Your squad' : 'The AI'} wins after ${b.tick} ticks.`, 'ko');
   C.teamOf(b, w).filter((x) => x.alive).forEach((x) => playAnim(x, weaponAnimation(x.weaponSet, 'Celebrate'), true));
 }
