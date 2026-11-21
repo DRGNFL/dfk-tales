@@ -5,7 +5,7 @@ import {
 import { mountWallet } from '../assets/session.js?v=1';
 import { readSquad, onSquadChange, setSkills, isComplete } from '../assets/squad.js?v=1';
 import { ACT_AT, makeRng, codexBudget } from './engine.js?v=1';
-import * as C from './combat.js?v=2';
+import * as C from './combat.js?v=3';
 import { CLASS_SKILLS } from './skills.js?v=1';
 import { traitsOf } from './traits.js?v=1';
 import { petInBattle } from './pets.js?v=1';

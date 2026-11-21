@@ -354,6 +354,7 @@ function heal(b, src, t, amount, label, canCrit = true) {
   if (canCrit && src && b.rng.chance(critOf(src) + modSum(src, 'healCrit') / 100)) { v *= CRIT_MULT; crit = true; }
   const before = t.hp;
   t.hp = Math.min(t.hpMax, t.hp + Math.round(v));
+  if (!canCrit && t.hp === before) return []; // passive heals on a full bar say nothing
   const ev = [{ type: 'heal', source: src && src.id, target: t.id, amount: t.hp - before, crit, label }];
   // Blessings of Light: a chance to Cleanse with every heal; critical heals may grant Unstoppable
   if (src && hasPassive(src, 'priest.blessingsOfLight')) {
