@@ -50,4 +50,10 @@ for (const [label, t, opt, want] of [
   ['aoe', team, { kind: 'aoe' }, 'P1,P2,P3'],
   ['melee reach 1, P1 down', [{ id: 'P1', alive: false }, team[1], team[2]], { kind: 'melee', reach: 1 }, 'P2'],
 ]) { const got = ids(E.targetable(t, opt)); const ok = got === want; if (!ok) fails++; console.log(`${ok ? 'OK  ' : 'FAIL'} ${label}: ${got}`); }
+
+// One roll to hit: accuracy minus evasion
+for (const [acc, eva, want] of [[0.9, 0.0962, 0.8038], [1.12, 0.1, 1], [0.36, 0.5, 0]]) {
+  const got = E.hitChance(acc, eva); const ok = Math.abs(got - want) < 1e-9; if (!ok) fails++;
+  console.log(`${ok ? 'OK  ' : 'FAIL'} hit chance ${acc} vs evasion ${eva}: ${got.toFixed(4)}`);
+}
 console.log(fails ? `\n${fails} FAILED` : '\nall checks pass');

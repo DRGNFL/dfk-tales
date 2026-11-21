@@ -103,6 +103,11 @@ export function accuracy({ stat, requirement, aar, curveBelow = 150, curveAbove 
   return v + (basic ? 0.05 : 0);
 }
 
+/* One roll to hit (Ge, 21/11/2026): chance = attacker's accuracy - target's evasion, kept between 0 and 1.
+   Accuracy can go above 100% (up to ~120%), which is what eats into high evasion. */
+export const hitChance = (acc, evasion) => Math.min(1, Math.max(0, acc - evasion));
+export const rollHit = (rng, acc, evasion) => rng.chance(hitChance(acc, evasion));
+
 /* ---------- damage pieces ----------
    Damage reduction from defence is a percentage that depends on the battle's average level: DEF / (50 * avgLVL).
    Critical hits: x1.5 base for damage and healing (daggers add +1.0). Block: 50% base, +20% with a shield. */
