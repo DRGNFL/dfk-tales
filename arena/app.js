@@ -782,27 +782,32 @@ function fxSkill(f, s, events, primary) {
 /* The loops on a hero: one status at a time, in turn every 2.2 s as in the game; a barrier, a ward and a channel on their own. */
 const LOOP_KEY = { stun: 'stun', daze: 'dazed', taunt: 'taunt', intimidate: 'intimidate', silence: 'silence', bleed: 'bleed', exhaust: 'exhausted', root: 'root', blind: 'blind', slow: 'slow', poison: 'poison', confuse: 'confuse', fear: 'fear', burn: 'burn', chill: 'chill', berserk: 'berserk', bmark: 'berserksMark', haste: 'haste', beacon: 'holybeacon', holyLight: 'holylight', hunterMark: 'huntersmark', unstoppable: 'unstoppable' };
 const CHANNEL_LOOP = ['channelingFront', 46, 84, 0.2, 'NORMAL'];
+/* Kept off the fighter objects: the computer's trials copy and restore those field by field. */
+const LOOPS_OF = new WeakMap();
+const loopState = (f) => LOOPS_OF.get(f) || (LOOPS_OF.set(f, { sig: null, list: [], idx: 0, el: null }), LOOPS_OF.get(f));
 function loops(f, force = false) {
   if (!geo.u || !f.node) return;
+  const L = loopState(f);
   const list = f.alive ? [...new Set(f.fx.map((e) => LOOP_KEY[e.key]).filter(Boolean))] : [];
   const sig = list.join('|');
-  if (force || sig !== f.loopSig) { f.loopSig = sig; f.loopList = list; f.loopIdx = 0; showLoop(f); }
-  steady(f, 'barrierEl', f.alive && f.fx.some((e) => e.key === 'barrier'), VFX.LOOPS.barrier, force);
-  steady(f, 'wardEl', f.alive && f.fx.some((e) => e.key === 'ward'), VFX.LOOPS.ward, force);
-  steady(f, 'chEl', f.alive && !!f.channel, CHANNEL_LOOP, force);
+  if (force || sig !== L.sig) { L.sig = sig; L.list = list; L.idx = 0; showLoop(f); }
+  steady(f, L, 'barrier', f.alive && f.fx.some((e) => e.key === 'barrier'), VFX.LOOPS.barrier, force);
+  steady(f, L, 'ward', f.alive && f.fx.some((e) => e.key === 'ward'), VFX.LOOPS.ward, force);
+  steady(f, L, 'channel', f.alive && !!f.channel, CHANNEL_LOOP, force);
 }
 function showLoop(f) {
-  if (f.loopEl) f.loopEl.remove();
-  f.loopEl = null;
-  const k = f.loopList && f.loopList.length ? f.loopList[f.loopIdx % f.loopList.length] : null;
+  const L = loopState(f);
+  if (L.el) L.el.remove();
+  L.el = null;
+  const k = L.list.length ? L.list[L.idx % L.list.length] : null;
   const st = k && VFX.STATUS[k];
-  if (st) f.loopEl = VFX.play(f.node, [st[0], st[3], 'NORMAL', 0, st[1], st[2], 0, 0, 60], fxOpts(f, { loop: true }));
+  if (st) L.el = VFX.play(f.node, [st[0], st[3], 'NORMAL', 0, st[1], st[2], 0, 0, 60], fxOpts(f, { loop: true }));
 }
-function steady(f, key, on, def, force) {
-  if (f[key] && (force || !on)) { f[key].remove(); f[key] = null; }
-  if (on && !f[key]) f[key] = VFX.play(f.node, [def[0], def[3], def[4], 0, def[1], def[2], 0, 0, 60], fxOpts(f, { loop: true }));
+function steady(f, L, key, on, def, force) {
+  if (L[key] && (force || !on)) { L[key].remove(); L[key] = null; }
+  if (on && !L[key]) L[key] = VFX.play(f.node, [def[0], def[3], def[4], 0, def[1], def[2], 0, 0, 60], fxOpts(f, { loop: true }));
 }
-setInterval(() => { if (!battle) return; for (const f of battle.fighters) if (f.loopList && f.loopList.length > 1) { f.loopIdx += 1; showLoop(f); } }, 2200);
+setInterval(() => { if (!battle) return; for (const f of battle.fighters) { const L = loopState(f); if (L.list.length > 1) { L.idx += 1; showLoop(f); } } }, 2200);
 
 /* Risings (Second Life) after an action: show them and give them a moment. */
 async function after(events) { if (!events || !events.length) return; showEvents(events); paint(); await sleep(1100); }
