@@ -3,7 +3,7 @@
    scores what happened, and plays the best. No look-ahead past its own action: channels and delayed effects are
    resolved at once in the trial and counted a little less, since they land later and can be broken.
    Scores are in "HP of the enemy": damage dealt and healing done count about the same, a knock-out a lot more. */
-import * as C from './combat.js?v=6';
+import * as C from './combat.js?v=7';
 import { makeRng } from './engine.js?v=1';
 
 const TRIES = 4;

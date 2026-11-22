@@ -143,12 +143,12 @@ export function blockOf(f, magic) {
 const blockCut = (f) => Math.min(0.95, BLOCK_BASE + modSum(f, 'blockCut') / 100);
 
 /* ---------- battle ---------- */
-/* heroes: { A: [hero...], B: [hero...] }; loadouts: { [heroId]: loadout } */
+/* heroes: { A: [hero...], B: [hero...] }; loadouts: { A1: loadout, … } by place (the same hero can stand on both sides), or { [heroId]: loadout } */
 export function createBattle({ heroes, rng, loadouts = {} }) {
   const all = [...heroes.A, ...heroes.B];
   const avgLvl = all.reduce((t, h) => t + h.level, 0) / all.length;
   const fighters = [];
-  for (const t of ['A', 'B']) heroes[t].forEach((h, i) => fighters.push(makeFighter(h, { team: t, pos: i + 1, avgLvl, rng, loadout: loadouts[String(h.id)] || {} })));
+  for (const t of ['A', 'B']) heroes[t].forEach((h, i) => fighters.push(makeFighter(h, { team: t, pos: i + 1, avgLvl, rng, loadout: loadouts[`${t}${i + 1}`] || loadouts[String(h.id)] || {} })));
   const b = { fighters, rng, avgLvl, tick: 0, over: false, winner: null, active: null, seq: 0, delayed: [], walls: { A: null, B: null } };
   for (const f of fighters) { f.b = b; f.speed = speedOf(f, b); }
   return b;

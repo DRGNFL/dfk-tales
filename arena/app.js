@@ -8,9 +8,9 @@ import { readSquad, onSquadChange, setSkills, isComplete, setCap, CAPS } from '.
 import { heroLook, heroKey, onArmoryChange } from '../assets/armory.js?v=1';
 import { hookCardIcons } from '../assets/equip-ui.js?v=1';
 import { ACT_AT, makeRng, codexBudget } from './engine.js?v=1';
-import * as C from './combat.js?v=6';
+import * as C from './combat.js?v=7';
 import { CLASS_SKILLS } from './skills.js?v=3';
-import * as AI from './ai.js?v=2';
+import * as AI from './ai.js?v=3';
 import { traitsOf } from './traits.js?v=2';
 import { svg, iconOf, imgOf, classImg, statusImg } from './icons.js?v=2';
 import * as VFX from './vfx.js?v=2';
@@ -36,6 +36,41 @@ let scene = null;
 let pending = null;    // { skill } or { skill: null } for the Basic Attack
 let handId = null;     // the hero whose skills are on the action bar (always one of yours)
 let geo = { W: 0, H: 0, u: 0 };
+/* Two players. duel: the match with a friend (the duel.js link and where it stands), null against the AI.
+   In the battle engine the one who opened the challenge is team A and the one who joined is team B; on the page
+   your heroes are always on the left: vis() turns an engine team into a page side ('A' = yours). */
+let duel = null;
+let mySide = 'A';
+const isMine = (f) => f.team === mySide;
+const vis = (t) => (t === mySide ? 'A' : 'B');
+const BUILD = 'arena-0.7'; // both browsers must run the same Arena: the same code computes the same battle
+const TURN_S = 40, LATE_S = 25; // seconds to choose a move; how long past that we wait for a friend before calling them gone
+let clock = null;
+/* The live link (duel.js and PeerJS) loads only when a challenge is opened or accepted: if it cannot load, the AI still plays. */
+let DUEL = null;
+const duelLib = async () => DUEL || (DUEL = await import('./duel.js?v=1'));
+const NO_LIB = 'The live mode could not load (PeerJS): check the connection or a blocker in the browser, then reload the page.';
+/* The challenge you opened or were sent, kept in this tab (sessionStorage) so a trip to the Legion Viewer does not lose it.
+   A link ?duel=code&cap=15&by=0xab…cd makes you the guest of that challenge. */
+const DUEL_KEY = 'dfk-tales:duel';
+const intent = {
+  get() { try { const v = JSON.parse(sessionStorage.getItem(DUEL_KEY) || 'null'); return v && Date.now() - v.at < 6 * 3600e3 ? v : null; } catch (e) { return null; } },
+  set(v) { try { if (v) sessionStorage.setItem(DUEL_KEY, JSON.stringify(v)); else sessionStorage.removeItem(DUEL_KEY); } catch (e) { /* private mode */ } },
+};
+{
+  const q = new URLSearchParams(location.search);
+  if (/^[a-z0-9]{6}$/.test(q.get('duel') || '')) {
+    const c = Number(q.get('cap'));
+    intent.set({ role: 'guest', code: q.get('duel'), cap: CAPS.includes(c) ? c : 15, by: String(q.get('by') || '').slice(0, 24), at: Date.now() });
+    for (const k of ['duel', 'cap', 'by']) q.delete(k);
+    history.replaceState(null, '', location.pathname + (q.toString() ? `?${q}` : ''));
+  }
+  const it = intent.get();
+  if (it) {
+    duel = { ...it, state: it.role === 'host' ? 'opening' : 'choosing', link: null, them: null, err: null, busy: false };
+    if (readSquad().cap !== it.cap) setCap(it.cap);
+  }
+}
 
 /* ================= scenes =================
    Every scene of the game's hero cards: 55 x 52 pixel art, most of them animated GIFs, a few with a front layer
@@ -145,8 +180,14 @@ function renderSetup() {
   if (!mine[tab] && mine.some(Boolean)) tab = mine.findIndex(Boolean);
   const ok = isComplete(s);
   const n = mine.filter(Boolean).length;
-  $('#btn-fight').disabled = !ok;
-  $('#status').textContent = ok ? `Level cap ${s.cap}. One Codex skill per tier, then Fight: the AI drafts three heroes near your level and plays them.`
+  const fb = $('#btn-fight');
+  fb.textContent = duel && duel.role === 'guest' ? 'Accept ▸' : 'Fight ▸';
+  fb.disabled = !ok || !!(duel && (duel.role === 'host' || duel.busy));
+  fb.title = duel && duel.role === 'host' ? 'You are waiting for your friend: cancel the challenge to fight the AI' : '';
+  renderDuelBox();
+  $('#status').textContent = duel && duel.role === 'guest' && ok ? `Level cap ${duel.cap}, set by the challenge. One Codex skill per tier, then Accept: the battle starts at once.`
+    : duel && duel.role === 'host' && ok ? `Level cap ${duel.cap}. Your challenge is open: send the link and keep this page open.`
+    : ok ? `Level cap ${s.cap}. One Codex skill per tier, then Fight: the AI drafts three heroes near your level and plays them.`
     : n === 0 ? (legion.addr ? 'No squad yet: press "Choose a hero" on P1, then P2 and P3.' : 'Paste a wallet address above (yours or any other), then choose a hero for P1, P2 and P3.')
     : `${n} of 3 heroes${n === 3 ? `, but someone is above the level cap ${s.cap}: change them` : ': choose the others'}.`;
   renderScenes();
@@ -285,7 +326,8 @@ function renderCaps(s) {
   for (const c of CAPS) {
     const b = el('button', null, `Lv ${c}`); b.type = 'button';
     b.setAttribute('aria-pressed', String(c === s.cap));
-    b.addEventListener('click', () => setCap(c));
+    if (duel) { b.disabled = true; b.title = 'The challenge fixes the level cap'; }
+    b.addEventListener('click', () => { if (!duel) setCap(c); });
     box.append(b);
   }
 }
@@ -466,15 +508,23 @@ async function fight(fresh) {
   }
   await startBattle(s);
 }
-$('#btn-fight').addEventListener('click', () => fight(true));
+$('#btn-fight').addEventListener('click', () => (duel && duel.role === 'guest' ? acceptDuel() : fight(true)));
 $('#btn-back').addEventListener('click', () => {
+  const bk = $('#btn-back');
+  if (duel && battle && !battle.over && !battle.stopped && bk.dataset.sure !== '1') {
+    bk.dataset.sure = '1'; bk.textContent = 'Leave? Your friend wins';
+    setTimeout(() => { bk.dataset.sure = ''; bk.textContent = duel ? '◂ Leave' : '◂ Squad'; }, 3500);
+    return;
+  }
+  bk.dataset.sure = '';
+  if (duel) leaveDuel();
   stopBattle();
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   document.body.classList.remove('in-battle');
   $('#battle').hidden = true; $('#setup').hidden = false;
   renderSetup();
 });
-$('#btn-rematch').addEventListener('click', () => { stopBattle(); fight(false); });
+$('#btn-rematch').addEventListener('click', () => { if (duel) { askRematch(); return; } stopBattle(); fight(false); });
 $('#btn-next').addEventListener('click', () => { stopBattle(); fight(true); });
 $('#btn-full').addEventListener('click', () => {
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
@@ -495,6 +545,7 @@ new ResizeObserver(() => { if (battle) layoutField(); }).observe($('#field'));
 function stopBattle() {
   if (!battle) return;
   battle.stopped = true;
+  stopClock();
   battle.fighters.forEach((f) => f.renderer && f.renderer.destroy && f.renderer.destroy());
   battle = null; pending = null; handId = null;
   hideTip();
@@ -507,32 +558,41 @@ async function startBattle(s) {
     const kit = kitOf(hero, ch);
     const h = { ...hero, __weaponSet: getHeroWeaponAnimationSet(hero, kit.weapon ? { weapon1: kit.weapon } : null) };
     heroes[team].push(h);
-    loadouts[String(h.id)] = { skills, weapon: kit.weapon, armor: kit.armor, offhand: kit.offhand, accessory: kit.accessory, pet: kit.pet };
-    looks[String(h.id)] = kit.look;
+    const at = `${team}${heroes[team].length}`;
+    loadouts[at] = { skills, weapon: kit.weapon, armor: kit.armor, offhand: kit.offhand, accessory: kit.accessory, pet: kit.pet };
+    looks[at] = kit.look;
   };
   s.teams.A.forEach((slot, i) => add('A', slot.hero, chainOf(mineLegions[i], slot.hero), skillsOf(slot)));
   for (const o of opponent.heroes) add('B', o.hero, o.ch, o.skills);
-  const seed = (Date.now() ^ (Math.random() * 0x7fffffff)) >>> 0;
+  const seed = newSeed();
+  mySide = 'A';
   const b = C.createBattle({ heroes, rng: makeRng(seed), loadouts });
-  Object.assign(b, { seed, stopped: false, turn: null, live: null, busy: false, cap: s.cap, ai: { A: false, B: true } });
+  Object.assign(b, { seed, stopped: false, turn: null, live: null, busy: false, cap: s.cap, ai: { A: false, B: true }, remote: null, dec: 0, acts: 0 });
+  enterBattle(b, pickScene(), looks);
+  log(opponent.mirror ? 'No other heroes kept in this browser: a mirror match against your own squad.'
+    : `The AI drafted ${opponent.heroes.map((o) => `${o.hero.name} (${cap(o.hero.class)} ${o.hero.level})`).join(', ')}.`, 'sys');
+  $('#b-eyebrow').textContent = `Level cap ${s.cap} · average level ${b.avgLvl.toFixed(1)} · ${scene.name} · seed ${seed}`;
+}
+const newSeed = () => (Date.now() ^ (Math.random() * 0x7fffffff)) >>> 0;
+/* The page of a battle that starts: field, plates, timebar, log; then the timebar runs. */
+function enterBattle(b, sc, looks) {
   battle = b;
-  scene = pickScene();
+  scene = sc;
   destroyCard();
   document.body.classList.add('in-battle');
   $('#setup').hidden = true; $('#battle').hidden = false;
   $('#btn-rematch').hidden = true; $('#btn-next').hidden = true; $('#result').hidden = true; $('#groups').hidden = false;
-  $('#b-eyebrow').textContent = `Level cap ${s.cap} · average level ${b.avgLvl.toFixed(1)} · ${scene.name} · seed ${seed}`;
+  $('#btn-back').textContent = duel ? '◂ Leave' : '◂ Squad'; $('#btn-back').dataset.sure = '';
+  $('#btn-rematch').textContent = 'Rematch'; $('#btn-rematch').disabled = false;
   $('#log').replaceChildren(); endLogGroup();
-  log(`Battle starts in the ${scene.name}. Seed ${seed}.`, 'sys');
-  log(opponent.mirror ? 'No other heroes kept in this browser: a mirror match against your own squad.'
-    : `The AI drafted ${opponent.heroes.map((o) => `${o.hero.name} (${cap(o.hero.class)} ${o.hero.level})`).join(', ')}.`, 'sys');
+  log(`Battle starts in the ${scene.name}. Seed ${b.seed}.`, 'sys');
   b.fighters.filter((f) => f.luckyStart).forEach((f) => log(`${f.name} starts lucky: triple Initiative.`, 'sys'));
   buildField(looks); buildPlates(); buildTimebar();
   layoutField();
   VFX.preload(['basicImpact', 'magicBlast', 'arcSlash', 'archerDefaultAttack', 'healImpact', 'secondLifeImpact', ...Object.values(VFX.STATUS).map((x) => x[0]), 'barrier', 'wardFront', 'channelingFront']);
   for (const f of b.fighters) for (const sk of [...f.skills, ...f.traitActives]) VFX.preloadSkill(sk.name);
   turnLine(null);
-  showHand(C.teamOf(b, 'A')[0], false);
+  showHand(C.teamOf(b, mySide)[0], false);
   paint();
   runLoop();
 }
@@ -546,16 +606,16 @@ function buildField(looks) {
   const front = $('#scene-front');
   field.querySelectorAll('.ftr').forEach((n) => n.remove());
   for (const f of battle.fighters) {
-    const node = el('div', `ftr ${f.team.toLowerCase()}${f.team === 'A' ? ' mine' : ''}`);
+    const node = el('div', `ftr ${vis(f.team).toLowerCase()}${isMine(f) ? ' mine' : ''}`);
     const canvas = el('canvas');
     const body = el('button', 'body'); body.type = 'button'; body.setAttribute('aria-label', f.name);
     node.append(canvas, el('span', 'chance'), body);
     body.addEventListener('click', () => onFighterClick(f));
-    tipOn(body, () => { if (battle) showTip(body, f.name, `${cap(f.hero.class)} · Lv ${f.level} · ${fmt(f.hp)} / ${fmt(f.hpMax)} HP`, f.team === 'A' && !node.classList.contains('can') ? 'Click to see its skills.' : null); });
+    tipOn(body, () => { if (battle) showTip(body, f.name, `${cap(f.hero.class)} · Lv ${f.level} · ${fmt(f.hp)} / ${fmt(f.hpMax)} HP`, isMine(f) && !node.classList.contains('can') ? 'Click to see its skills.' : null); });
     f.node = node; f.canvas = canvas;
     field.insertBefore(node, front);
     f.idle = weaponAnimation(f.weaponSet, 'Idle');
-    const look = looks[String(f.hero.id)];
+    const look = looks[f.id] || looks[String(f.hero.id)];
     f.renderer = new HeroRenderer(canvas, f.hero, { animation: f.idle, mix: 0.12, zoom: ZOOM, ...(look ? { gear: look } : {}), onEvent: (ev) => { if (ev.name === 'hit' && f.onHit) { const fn = f.onHit; f.onHit = null; fn(); } } });
   }
 }
@@ -600,7 +660,7 @@ function place() {
   const { W, H, u } = geo;
   const top = H * GROUND - FEET * u;
   for (const f of battle.fighters) {
-    const x = W / 2 + (f.team === 'A' ? -1 : 1) * DX[f.pos] * u;
+    const x = W / 2 + (isMine(f) ? -1 : 1) * DX[f.pos] * u;
     const st = f.node.style;
     st.left = `${x - u / 2}px`; st.top = `${top}px`; st.width = `${u}px`; st.height = `${u}px`;
   }
@@ -615,7 +675,7 @@ function drawHead(f, target) {
   ctx.imageSmoothingEnabled = false;
   ctx.clearRect(0, 0, target.width, target.height);
   ctx.save();
-  if (f.team === 'A') { ctx.translate(target.width, 0); ctx.scale(-1, 1); }
+  if (isMine(f)) { ctx.translate(target.width, 0); ctx.scale(-1, 1); }
   try { ctx.drawImage(src, sx, sy, size, size, 0, 0, target.width, target.height); } catch (e) { /* not drawn yet */ }
   ctx.restore();
 }
@@ -629,7 +689,7 @@ function buildPlates() {
     const info = el('div');
     const nm = el('div', 'nm');
     const ci = img(classImg(f.cls));
-    if (f.team === 'B') nm.append(f.name.split(' ')[0], ci); else nm.append(ci, f.name.split(' ')[0]);
+    if (!isMine(f)) nm.append(f.name.split(' ')[0], ci); else nm.append(ci, f.name.split(' ')[0]);
     info.append(nm, bar('hp'), bar('mp'));
     if (f.cls === 'wizard') info.append(bar('ap'));
     info.append(el('div', 'tags'));
@@ -638,7 +698,7 @@ function buildPlates() {
     p.addEventListener('click', () => onFighterClick(f));
     tipOn(p, () => { if (!battle) return; const sh = C.sheet(battle, f); showTip(p, f.name, `${cap(f.hero.class)} · Lv ${f.level} · P${f.pos} · ${f.weapon.name}${f.weapon.loaned ? ' (loaned)' : ''}`, `HP ${fmt(f.hp)} / ${fmt(f.hpMax)} · MP ${fmt(f.mp)} / ${fmt(f.mpMax)}${f.cls === 'wizard' ? ` · Arcane Power ${f.ap} / ${C.AP_MAX}` : ''} · ATK ${fmt(sh.attack)} · SPELL ${fmt(sh.spell)} · P.DEF ${fmt(sh.pdef)} · M.DEF ${fmt(sh.mdef)} · EVA ${pct(sh.evasion)} · CRIT ${pct(sh.crit)} · Speed ${sh.speed.toFixed(1)}`, C.tags(f).map((t) => t.name).join(' · ') || null); });
     f.plate = p; f.portrait = pc;
-    $(`#side-${f.team.toLowerCase()}`).append(p);
+    $(`#side-${vis(f.team).toLowerCase()}`).append(p);
   }
 }
 /* A bar with its number beside it: HP, MP, and the Wizard's Arcane Power. */
@@ -660,7 +720,7 @@ function buildTimebar() {
   const tb = $('#timebar');
   tb.querySelectorAll('.mk').forEach((m) => m.remove());
   for (const f of battle.fighters) {
-    const m = el('div', `mk ${f.team.toLowerCase()}`);
+    const m = el('div', `mk ${vis(f.team).toLowerCase()}`);
     const c = el('canvas'); c.width = 34; c.height = 34; m.append(c);
     m.title = f.name;
     f.marker = m; f.markerCanvas = c;
@@ -678,7 +738,7 @@ function paint() {
     f.marker.classList.toggle('down', !f.alive);
     f.marker.classList.toggle('turn', f.id === turnId);
     f.marker.classList.toggle('ch', !!f.channel);
-    f.marker.title = f.channel && f.team === 'A' ? `${f.name} · channelling ${f.channel.skill.name}` : f.channel ? `${f.name} · channelling` : f.name;
+    f.marker.title = f.channel && isMine(f) ? `${f.name} · channelling ${f.channel.skill.name}` : f.channel ? `${f.name} · channelling` : f.name;
     for (const n of [f.node, f.plate]) { n.classList.toggle('turn', f.id === turnId); n.classList.toggle('down', !f.alive); }
     f.plate.classList.toggle('shown', f.id === handId);
     f.plate.style.order = f.pos;
@@ -740,7 +800,7 @@ function showEvents(events) {
     const t = e.target && byId(e.target);
     if (e.type === 'skill') {
       const src = byId(e.source);
-      log(`${nameOf(e.source)}: ${e.skill}${e.target ? ` → ${nameOf(e.target)}` : ''}`, 'hit', src && src.team);
+      log(`${nameOf(e.source)}: ${e.skill}${e.target ? ` → ${nameOf(e.target)}` : ''}`, 'hit', src && vis(src.team));
       if (e.delayed && src) floatText(src, e.skill.replace(' (delayed)', ''), 'st good', bump(e.source));
       if (e.delayed) { const name = e.skill.replace(' (delayed)', ''); const d = VFX.skillFx(`Delay: ${name}`) || VFX.skillFx(name); const fx = d && (d.hitEffectFront || d.globalHitEffectFront); const t = e.target && byId(e.target); if (fx && t) VFX.play(t.node, fx, fxOpts(t, { delay: 0 })); }
       continue;
@@ -764,7 +824,7 @@ function showEvents(events) {
     }
     else if (e.type === 'move') { place(); log(e.text, 'sub'); }
     else if (e.type === 'ap') { if (e.amount >= 3) floatText(t, `+${e.amount} AP`, 'st good', bump(t.id)); log(e.text, 'sub'); }
-    else if (e.type === 'channel') { const src = byId(e.source || e.target); log(e.text, 'hit', src && src.team); }
+    else if (e.type === 'channel') { const src = byId(e.source || e.target); log(e.text, 'hit', src && vis(src.team)); }
   }
 }
 
@@ -792,7 +852,7 @@ function animFor(f, s, phase) {
   return pickAnim(f, [s.anim, hits ? weaponAnimation(set, 'Hit') : weaponAnimation(set, 'Cast'), hits ? null : HERO_ANIMATIONS.shout].filter(Boolean));
 }
 /* ---------- the game's effects ---------- */
-const fxOpts = (x, extra) => ({ u: geo.u, zoom: ZOOM, side: x.team, ...extra });
+const fxOpts = (x, extra) => ({ u: geo.u, zoom: ZOOM, side: vis(x.team), ...extra });
 const IMPACT = ['basicImpact', 0.2, 'NORMAL', 0, 60, 78, 1, 0, 2];
 const MAGIC_IMPACT = ['magicBlast', 0.2, 'NORMAL', 0, 72, 87, 1, 0, 2];
 const HEAL_IMPACT = ['healImpact', 0.2, 'NORMAL', 0, 52, 76, 0, 0, 1];
@@ -885,7 +945,7 @@ async function runLoop() {
     }
     if (f.channel) {
       const s = f.channel.skill;
-      b.turn = f; b.live = null; turnLine(f, f.team === 'A' ? `completes ${s.name}` : 'completes a channel'); paint();
+      b.turn = f; b.live = null; turnLine(f, isMine(f) ? `completes ${s.name}` : 'completes a channel'); paint();
       const chTarget = f.channel.target ? byId(f.channel.target) : null;
       const ev = C.completeChannel(b, f);
       const onLand = fxSkill(f, s, ev, chTarget);
@@ -902,6 +962,8 @@ async function runLoop() {
     const forced = C.forcedAction(b, f);
     if (forced) { forcedTurn(f, forced); return; }
     if (b.ai[f.team]) { aiTurn(f); return; }
+    b.dec += 1; // a choice to make: yours, or your friend's
+    if (b.remote === f.team) { remoteTurn(f); return; }
     offerTurn(f);
     return;
   }
@@ -914,7 +976,7 @@ function turnLine(f, extra) {
   t.className = 'turnline';
   if (!f) { t.replaceChildren(); return; }
   if (battle && battle.live === f && handId === f.id) { t.replaceChildren(extra || 'Click an enemy for a Basic Attack, or pick a skill'); return; }
-  t.replaceChildren(f.team === 'A' ? 'Your turn · ' : 'Enemy turn · ', el('b', f.team === 'B' ? 'b' : null, f.name), extra ? ` · ${extra}` : '');
+  t.replaceChildren(isMine(f) ? 'Your turn · ' : 'Enemy turn · ', el('b', !isMine(f) ? 'b' : null, f.name), extra ? ` · ${extra}` : '');
 }
 
 /* ---------- the action bar: only your heroes, ever ---------- */
@@ -942,7 +1004,7 @@ function clearHand() {
 async function forcedTurn(f, act) {
   const b = battle;
   b.turn = f; b.live = null; b.busy = false;
-  if (f.team === 'A') showHand(f, false);
+  if (isMine(f)) showHand(f, false);
   paint();
   turnLine(f, `${act.why}: attacks on its own`);
   log(`${f.name} is ${act.why} and attacks on its own.`, 'sys');
@@ -964,7 +1026,7 @@ async function aiTurn(f) {
   b.busy = false;
   if (d.kind === 'attack') doAttack(f, d.target);
   else if (d.kind === 'skill') doSkill(f, d.skill, d.target);
-  else { b.busy = true; log(`${f.name} passes.`, 'hit', f.team); finishAction(f, 'pass'); }
+  else { b.busy = true; log(`${f.name} passes.`, 'hit', vis(f.team)); finishAction(f, 'pass'); }
 }
 
 function offerTurn(f) {
@@ -974,6 +1036,7 @@ function offerTurn(f) {
   showHand(f, true);
   turnLine(f);
   setPending(f, null);
+  if (duel) startClock(f, true);
 }
 
 /* The action bar: Actions & abilities (Basic Attack, move, pass, active traits, pet skill), Skills (Codex), Passives. */
@@ -998,22 +1061,22 @@ function renderHand(f, live) {
     if (!ok(atk)) return;
     setPending(f, null);
     const ts = C.enemyTargets(b, f, { kind: f.weapon.kind, reach: f.weapon.reach });
-    if (ts.length === 1) doAttack(f, ts[0]);
+    if (ts.length === 1) mineAct(f, { kind: 'attack', target: ts[0] });
   });
   A.append(atk);
   // move one place forward or back, pass
   const mates = C.alliesOf(b, f);
   for (const d of [-1, 1]) {
     const other = mates.find((m) => m.pos === f.pos + d);
-    const t = tile(f.team === 'A' ? (d < 0 ? 'right' : 'left') : (d < 0 ? 'left' : 'right'));
+    const t = tile(isMine(f) ? (d < 0 ? 'right' : 'left') : (d < 0 ? 'left' : 'right'));
     if (!other || C.has(f, 'root')) t.classList.add('off');
     tipOn(t, () => showTip(t, other ? `Move to P${other.pos}` : 'Move', other ? `Swap places with ${other.name}` : 'Nobody there', 'Gives back 250 Initiative.', C.has(f, 'root') ? 'Rooted' : null));
-    t.addEventListener('click', () => { if (!ok(t) || !other) return; b.busy = true; b.live = null; hideTip(); clearTargets(); lockHand(f); showEvents(C.reposition(b, f, other)); place(); finishAction(f, 'reposition'); });
+    t.addEventListener('click', () => { if (!ok(t) || !other) return; mineAct(f, { kind: 'move', other }); });
     A.append(t);
   }
   const pass = tile('pass');
   tipOn(pass, () => showTip(pass, 'Pass', null, 'Gives back 400 Initiative.'));
-  pass.addEventListener('click', () => { if (!ok(pass)) return; b.busy = true; b.live = null; hideTip(); clearTargets(); lockHand(f); log(`${f.name} passes.`, 'hit', f.team); finishAction(f, 'pass'); });
+  pass.addEventListener('click', () => { if (!ok(pass)) return; mineAct(f, { kind: 'pass' }); });
   A.append(pass);
   for (const s of f.traitActives) A.append(actTile(f, s, live, 'trait'));
   if (f.petSkill) A.append(actTile(f, f.petSkill, live, 'pet'));
@@ -1062,8 +1125,8 @@ function actTile(f, s, live, kind) {
     if (!live || b.busy || t.classList.contains('off')) return;
     hideTip();
     if (pending && pending.skill === s) { setPending(f, null); return; }
-    if (!needs) { doSkill(f, s, null); return; }
-    if (targets.length === 1 && s.target === 'enemy') { doSkill(f, s, targets[0]); return; }
+    if (!needs) { mineAct(f, { kind: 'skill', skill: s, target: null }); return; }
+    if (targets.length === 1 && s.target === 'enemy') { mineAct(f, { kind: 'skill', skill: s, target: targets[0] }); return; }
     setPending(f, s);
   });
   return t;
@@ -1097,10 +1160,10 @@ function onFighterClick(t) {
   if (!b || b.over) return;
   const f = b.live;
   if (f && !b.busy && handId === f.id && t.node.classList.contains('can')) {
-    if (pending && pending.skill) doSkill(f, pending.skill, t); else doAttack(f, t);
+    mineAct(f, pending && pending.skill ? { kind: 'skill', skill: pending.skill, target: t } : { kind: 'attack', target: t });
     return;
   }
-  if (t.team !== 'A') return;
+  if (!isMine(t)) return;
   if (f && t === f && !b.busy) { showHand(f, true); setPending(f, null); return; }
   clearTargets(); pending = null;
   showHand(t, false);
@@ -1111,18 +1174,46 @@ async function doAttack(f, t) {
   const b = battle;
   if (b.busy) return;
   b.busy = true; b.live = null; hideTip(); clearTargets(); lockHand(f);
-  turnLine(f, f.team === 'A' ? 'Basic Attack' : null);
+  turnLine(f, isMine(f) ? 'Basic Attack' : null);
   const events = C.basicAttack(b, f, t);
   fxBasic(f);
   await animate(f, events, animFor(f, null), fxImpacts(f, events));
   if (b.stopped) return;
   finishAction(f, 'action');
 }
+async function doMove(f, other) {
+  const b = battle;
+  if (b.busy) return;
+  b.busy = true; b.live = null; hideTip(); clearTargets(); lockHand(f);
+  showEvents(C.reposition(b, f, other)); place();
+  finishAction(f, 'reposition');
+}
+function doPass(f) {
+  const b = battle;
+  if (b.busy) return;
+  b.busy = true; b.live = null; hideTip(); clearTargets(); lockHand(f);
+  log(`${f.name} passes.`, 'hit', vis(f.team));
+  finishAction(f, 'pass');
+}
+/* A move, yours or your friend's: { kind: 'attack', target } | { kind: 'skill', skill, target } | { kind: 'move', other } | { kind: 'pass' }. */
+function apply(f, m) {
+  if (m.kind === 'attack') doAttack(f, m.target);
+  else if (m.kind === 'skill') doSkill(f, m.skill, m.target);
+  else if (m.kind === 'move') doMove(f, m.other);
+  else doPass(f);
+}
+/* Your choice: in a duel it goes to your friend first, then both browsers play it. */
+function mineAct(f, m) {
+  const b = battle;
+  if (!b || b.busy || b.live !== f) return;
+  if (duel && b.remote) { stopClock(); duel.link.send({ t: 'move', g: duel.game, dec: b.dec, f: f.id, kind: m.kind, skill: m.skill ? m.skill.id : null, target: m.target ? m.target.id : null, other: m.other ? m.other.id : null }); }
+  apply(f, m);
+}
 async function doSkill(f, s, t) {
   const b = battle;
   if (b.busy) return;
   b.busy = true; b.live = null; hideTip(); clearTargets(); lockHand(f);
-  turnLine(f, f.team === 'A' ? s.name : null);
+  turnLine(f, isMine(f) ? s.name : null);
   const events = C.useSkill(b, f, s, t);
   const onLand = s.channel ? null : fxSkill(f, s, events, t);
   await animate(f, events, animFor(f, s, s.channel ? 'channel' : null), onLand);
@@ -1138,6 +1229,7 @@ function lockHand(f) {
 async function finishAction(f, kind, s = null) {
   const b = battle;
   const ev = C.endTurn(b, f, kind, s);
+  if (duel && b.remote) sendSum(b);
   b.turn = null; b.live = null;
   refreshHand();
   paint();
@@ -1147,21 +1239,368 @@ async function finishAction(f, kind, s = null) {
   if (b.over) finish(); else runLoop();
 }
 
-function finish() {
+function finish(note) {
   const b = battle;
   const w = b.winner;
+  const won = w === mySide;
+  const them = duel ? duel.them : 'The AI';
   b.turn = null; b.live = null;
+  stopClock();
   paint();
   clearHand();
   const t = $('#turnline');
   t.className = 'turnline result';
-  t.textContent = w === 'A' ? 'Your squad wins' : 'The AI wins';
+  t.textContent = note || (won ? 'Your squad wins' : `${cap(them)} wins`);
   const r = $('#result');
-  r.className = `banner${w === 'A' ? '' : ' lose'}`;
+  r.className = `banner${won ? '' : ' lose'}`;
   $('#groups').hidden = true;
-  r.querySelector('b').textContent = w === 'A' ? 'Victory' : 'Defeat';
+  r.querySelector('b').textContent = won ? 'Victory' : 'Defeat';
   r.hidden = false;
-  $('#btn-rematch').hidden = false; $('#btn-next').hidden = false;
-  log(`${w === 'A' ? 'Your squad' : 'The AI'} wins after ${b.tick} ticks.`, 'ko');
+  $('#btn-rematch').hidden = !!(duel && !duel.link); $('#btn-next').hidden = !!duel;
+  log(note || `${won ? 'Your squad' : cap(them)} wins after ${b.tick} ticks.`, 'ko');
   C.teamOf(b, w).filter((x) => x.alive).forEach((x) => playAnim(x, weaponAnimation(x.weaponSet, 'Celebrate'), true));
 }
+
+/* ================= two players =================
+   A challenge by link. The one who opens it (host, team A in the engine) waits on this page; the friend (guest, team B)
+   opens the link, chooses a squad at the challenge's level cap and accepts. The host's page puts the two squads, a seed
+   and the scene together and sends them: from there both browsers run the same battle and only the moves travel.
+   Every move is checked against the battle before it is played; after every action the two fingerprints must match. */
+function duelUrl(d) { return `${location.origin}${location.pathname}?duel=${d.code}&cap=${d.cap}${d.by ? `&by=${encodeURIComponent(d.by)}` : ''}`; }
+function linkError(kind) { return ({
+  'peer-unavailable': 'Nobody is waiting on this link: the challenge was closed, or your friend\'s page is not open any more.',
+  'browser-incompatible': 'This browser cannot play live matches (it has no WebRTC).',
+  'unavailable-id': 'This challenge is already open in another page.',
+}[kind] || `Could not reach the meeting point (${kind}): check the connection and try again.`); }
+const NOPE = {
+  version: 'Your page and your friend\'s run different versions of the Arena: both reload the page, then try again.',
+  host: 'Your friend\'s squad is not ready any more: ask them to check it.',
+  squad: 'Your friend\'s page did not accept your squad: three heroes, none above the level cap.',
+};
+
+function renderDuelBox() {
+  const box = $('#duelbox');
+  if (!box) return;
+  box.replaceChildren();
+  box.classList.toggle('on', !!duel);
+  const quiet = (text, fn) => { const b = el('button', 'quiet', text); b.type = 'button'; b.addEventListener('click', fn); return b; };
+  if (!duel) {
+    const ok = isComplete(readSquad());
+    box.append(el('span', 'lb', 'Two players'), el('span', 'info', 'Challenge a friend: you send a link, your friend opens it, chooses a squad, and you fight live, turn by turn.'));
+    const b = el('button', null, 'Challenge a friend ▸'); b.type = 'button';
+    b.disabled = !ok; if (!ok) b.title = 'Choose your three heroes first';
+    b.addEventListener('click', hostDuel);
+    box.append(b);
+    return;
+  }
+  if (duel.role === 'host') {
+    box.append(el('span', 'lb', `Your challenge · Lv ${duel.cap}`));
+    const inp = el('input'); inp.type = 'text'; inp.readOnly = true; inp.value = duelUrl(duel); inp.setAttribute('aria-label', 'Link of the challenge');
+    inp.addEventListener('focus', () => inp.select());
+    const cp = el('button', 'primary', 'Copy link'); cp.type = 'button';
+    cp.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(inp.value); cp.textContent = 'Copied ✓'; } catch (e) { inp.focus(); cp.textContent = 'Selected: copy it'; }
+      setTimeout(() => { cp.textContent = 'Copy link'; }, 1800);
+    });
+    box.append(inp, cp, quiet('cancel', leaveDuel));
+    box.append(el('span', `line${duel.err ? ' err' : ''}`, duel.err || (duel.state === 'opening' ? 'Opening the challenge…'
+      : duel.state === 'joined' ? 'Your friend is here: the battle starts…'
+      : 'Waiting for your friend. Keep this page open: the challenge lives in it.')));
+    return;
+  }
+  box.append(el('span', 'lb', '⚔ Challenge'));
+  const info = el('span', 'info');
+  info.append('from ', el('b', null, duel.by || 'a friend'), ` · level cap ${duel.cap}. Choose three heroes up to level ${duel.cap} and their skills, then Accept.`);
+  box.append(info, quiet('leave the challenge', leaveDuel));
+  const line = duel.err || (duel.state === 'connecting' ? 'Connecting to your friend…' : duel.state === 'joined' ? 'Connected: the battle starts…' : null);
+  if (line) box.append(el('span', `line${duel.err ? ' err' : ''}`, line));
+}
+
+async function hostDuel() {
+  const s = readSquad();
+  if (!isComplete(s) || duel) return;
+  try { await duelLib(); } catch (e) { console.error(e); $('#status').textContent = NO_LIB; return; }
+  if (duel) return;
+  const it = { role: 'host', code: DUEL.newCode(), cap: s.cap, by: legion.addr ? shortAddr(legion.addr) : '', at: Date.now() };
+  intent.set(it);
+  duel = { ...it, state: 'opening', link: null, them: null, err: null, busy: false };
+  openHost(0);
+  renderSetup();
+}
+async function openHost(tries) {
+  const d = duel;
+  if (!d || d.role !== 'host') return;
+  d.state = 'opening';
+  try { await duelLib(); } catch (e) { console.error(e); d.err = NO_LIB; renderDuelBox(); return; }
+  if (duel !== d) return;
+  d.link = DUEL.open('host', d.code, {
+    ready: () => { if (duel !== d) return; d.state = 'waiting'; d.err = null; renderDuelBox(); },
+    joined: () => { if (duel !== d) return; d.state = 'joined'; d.err = null; renderDuelBox(); },
+    message: (m) => { if (duel === d) onDuelMessage(m); },
+    left: (why) => { if (duel === d) friendLeft(why); },
+    error: (kind) => {
+      if (duel !== d) return;
+      // back from the Legion Viewer, the meeting point may still hold the old page's place for a while
+      if (kind === 'unavailable-id' && tries < 25) { d.link.close(); d.link = null; d.err = 'Reopening the challenge…'; renderDuelBox(); setTimeout(() => { if (duel === d) openHost(tries + 1); }, 3000); return; }
+      d.err = linkError(kind); renderDuelBox();
+    },
+  });
+  renderDuelBox();
+}
+/* What the battle needs of your squad: each hero as the chain has it, its skills and what it wears. */
+async function squadPayload(s) {
+  const Ls = await Promise.all(s.teams.A.map((slot) => legionOf(slot.hero)));
+  return {
+    who: legion.addr || null,
+    heroes: s.teams.A.map((slot, i) => {
+      const kit = kitOf(slot.hero, chainOf(Ls[i], slot.hero));
+      return { hero: plain(slot.hero), loadout: plain({ skills: skillsOf(slot), weapon: kit.weapon, armor: kit.armor, offhand: kit.offhand, accessory: kit.accessory, pet: kit.pet }), look: kit.look ? plain(kit.look) : null };
+    }),
+  };
+}
+async function acceptDuel() {
+  const d = duel;
+  if (!d || d.role !== 'guest' || d.busy) return;
+  const s = readSquad();
+  if (s.cap !== d.cap) { setCap(d.cap); return; }
+  if (!isComplete(s)) return;
+  d.busy = true; d.state = 'connecting'; d.err = null;
+  renderSetup();
+  let squad = null;
+  try { squad = await squadPayload(s); } catch (e) { console.error(e); }
+  if (duel !== d) return;
+  if (!squad) { d.busy = false; d.state = 'choosing'; d.err = 'Your squad could not be read: reload the page.'; renderSetup(); return; }
+  try { await duelLib(); } catch (e) { console.error(e); d.busy = false; d.state = 'choosing'; d.err = NO_LIB; renderSetup(); return; }
+  if (duel !== d) return;
+  d.link = DUEL.open('guest', d.code, {
+    joined: () => { if (duel !== d) return; d.state = 'joined'; d.link.send({ t: 'join', proto: DUEL.PROTO, build: BUILD, squad: JSON.stringify(squad) }); renderDuelBox(); },
+    message: (m) => { if (duel === d) onDuelMessage(m); },
+    left: (why) => { if (duel === d) friendLeft(why); },
+    error: (kind) => { if (duel !== d) return; if (d.link) d.link.close(); d.link = null; d.busy = false; d.state = 'choosing'; d.err = linkError(kind); renderSetup(); },
+  });
+}
+function leaveDuel() {
+  const d = duel;
+  if (!d) return;
+  if (d.link) d.link.close();
+  duel = null; mySide = 'A';
+  intent.set(null);
+  stopClock();
+  if (!battle) renderSetup();
+}
+window.addEventListener('pagehide', () => { if (duel && duel.link) duel.link.close(); });
+
+function onDuelMessage(m) {
+  const d = duel;
+  if (m.t === 'busy' || m.t === 'nope') {
+    if (d.link) d.link.close();
+    Object.assign(d, { link: null, busy: false, state: 'choosing', err: m.t === 'busy' ? 'Someone else already took this challenge.' : NOPE[m.why] || 'Your friend\'s page said no.' });
+    renderSetup();
+  } else if (m.t === 'join') hostJoin(m);
+  else if (m.t === 'start') launchDuel(m);
+  else if (m.t === 'move') { if (battle && m.g === d.game) { d.moves[m.dec] = m; tryRemote(); } }
+  else if (m.t === 'sum') { if (battle && m.g === d.game) { d.sums.theirs[m.n] = m.h; checkSum(m.n); } }
+  else if (m.t === 'void') { if (m.g === d.game) outOfStep(true); }
+  else if (m.t === 'again') {
+    if (!battle || m.g !== d.game || !(battle.over || battle.stopped)) return;
+    d.again.them = true;
+    log(`${cap(d.them)} wants a rematch.`, 'sys');
+    rematchButton();
+    if (d.role === 'host' && d.again.me) startMatch();
+  }
+}
+async function hostJoin(m) {
+  const d = duel;
+  if (d.role !== 'host' || battle || !d.link) return;
+  const no = (why) => d.link.send({ t: 'nope', why });
+  if (m.proto !== DUEL.PROTO || m.build !== BUILD) return no('version');
+  const s = readSquad();
+  if (!isComplete(s) || s.cap !== d.cap) return no('host');
+  let theirs = null;
+  try { theirs = JSON.parse(m.squad); } catch (e) { /* not a squad */ }
+  const fits = (p) => p && p.hero && p.hero.class && Number(p.hero.level) <= d.cap && p.loadout && Array.isArray(p.loadout.skills);
+  if (!theirs || !Array.isArray(theirs.heroes) || theirs.heroes.length !== 3 || !theirs.heroes.every(fits)) return no('squad');
+  d.squads = { A: await squadPayload(s), B: { who: isAddr(theirs.who) ? theirs.who : null, heroes: theirs.heroes } };
+  if (duel === d && d.link) startMatch();
+}
+/* The host puts the match together and sends it; both pages start it from the same text. */
+function startMatch() {
+  const d = duel;
+  const setup = { g: (d.game || 0) + 1, seed: newSeed(), cap: d.cap, scene: pickScene().id, A: d.squads.A, B: d.squads.B };
+  const json = JSON.stringify(setup);
+  d.link.send({ t: 'start', setup: json });
+  launchDuel({ setup: json });
+}
+function launchDuel(m) {
+  const d = duel;
+  let setup = null;
+  try { setup = JSON.parse(m.setup); } catch (e) { return; }
+  if (!setup || !setup.A || !setup.B) return;
+  if (battle) stopBattle();
+  intent.set(null); // the challenge is taken: from here the match lives in the link
+  Object.assign(d, { game: setup.g, state: 'battle', busy: false, err: null, moves: {}, wait: null, sums: { mine: {}, theirs: {} }, again: { me: false, them: false } });
+  mySide = d.role === 'host' ? 'A' : 'B';
+  const foe = setup[mySide === 'A' ? 'B' : 'A'];
+  d.them = foe.who && isAddr(foe.who) ? shortAddr(foe.who) : 'your friend';
+  const heroes = { A: [], B: [] }, loadouts = {}, looks = {};
+  for (const t of ['A', 'B']) setup[t].heroes.forEach((p, i) => {
+    heroes[t].push({ ...p.hero, __weaponSet: getHeroWeaponAnimationSet(p.hero, p.loadout.weapon ? { weapon1: p.loadout.weapon } : null) });
+    loadouts[`${t}${i + 1}`] = p.loadout;
+    if (p.look) looks[`${t}${i + 1}`] = p.look;
+  });
+  const b = C.createBattle({ heroes, rng: makeRng(setup.seed >>> 0), loadouts });
+  Object.assign(b, { seed: setup.seed, stopped: false, turn: null, live: null, busy: false, cap: setup.cap, ai: { A: false, B: false }, remote: mySide === 'A' ? 'B' : 'A', dec: 0, acts: 0 });
+  enterBattle(b, SCENES.find((x) => x.id === setup.scene) || SCENES[0], looks);
+  log(`Live match against ${d.them}: your squad is on the left. ${TURN_S} seconds for each move.`, 'sys');
+  $('#b-eyebrow').textContent = `Live · you vs ${d.them} · level cap ${setup.cap} · average level ${b.avgLvl.toFixed(1)} · ${scene.name} · seed ${setup.seed}`;
+}
+
+/* Your friend's turn: wait for the move, check it fits the battle, play it. */
+function remoteTurn(f) {
+  const b = battle;
+  b.turn = f; b.live = null; b.busy = true;
+  paint();
+  turnLine(f, `${duel.them} is choosing`);
+  refreshHand();
+  duel.wait = { dec: b.dec, f };
+  startClock(f, false);
+  tryRemote();
+}
+function tryRemote() {
+  const b = battle, d = duel;
+  const w = d && d.wait;
+  if (!b || !w || b.stopped) return;
+  const m = d.moves[w.dec];
+  if (!m) return;
+  delete d.moves[w.dec]; d.wait = null;
+  stopClock();
+  const mv = m.f === w.f.id ? decodeMove(w.f, m) : null;
+  if (!mv) { outOfStep(false, `${cap(d.them)}'s move does not fit this battle`); return; }
+  b.busy = false;
+  apply(w.f, mv);
+}
+function decodeMove(f, m) {
+  const b = battle;
+  if (m.kind === 'pass') return { kind: 'pass' };
+  if (m.kind === 'move') {
+    const o = byIdSafe(m.other);
+    return o && o.team === f.team && Math.abs(o.pos - f.pos) === 1 && !C.has(f, 'root') ? { kind: 'move', other: o } : null;
+  }
+  if (m.kind === 'attack') {
+    const t = byIdSafe(m.target);
+    return t && C.enemyTargets(b, f, { kind: f.weapon.kind, reach: f.weapon.reach }).includes(t) ? { kind: 'attack', target: t } : null;
+  }
+  if (m.kind === 'skill') {
+    const s = [...f.skills, ...f.traitActives, ...(f.petSkill ? [f.petSkill] : [])].find((x) => x.id === m.skill);
+    if (!s || C.skillBlocked(b, f, s)) return null;
+    if (!['enemy', 'ally', 'allyOther', 'fallen'].includes(s.target)) return { kind: 'skill', skill: s, target: null };
+    const t = byIdSafe(m.target);
+    return t && C.skillTargets(b, f, s).includes(t) ? { kind: 'skill', skill: s, target: t } : null;
+  }
+  return null;
+}
+const byIdSafe = (id) => (typeof id === 'string' && battle ? battle.fighters.find((x) => x.id === id) || null : null);
+
+/* The clock of a move: yours plays a Basic Attack (or passes) when it runs out; your friend's, long past it, means they are gone. */
+function startClock(f, mineTurn) {
+  stopClock();
+  const end = Date.now() + TURN_S * 1000;
+  const box = $('#clock');
+  box.hidden = false;
+  const tick = () => {
+    const b = battle;
+    if (!b || b.stopped || b.over || !duel) { stopClock(); return; }
+    const left = Math.ceil((end - Date.now()) / 1000);
+    box.textContent = mineTurn ? `${Math.max(0, left)}s to choose` : left > 0 ? `${cap(duel.them)} · ${left}s` : `waiting for ${duel.them}…`;
+    box.classList.toggle('low', mineTurn && left <= 10);
+    if (mineTurn && left <= 0) { stopClock(); autoMove(f); } else if (!mineTurn && left <= -LATE_S) { stopClock(); friendLeft('timeout'); }
+  };
+  tick();
+  clock = setInterval(tick, 250);
+}
+function stopClock() {
+  if (clock) clearInterval(clock);
+  clock = null;
+  const c = $('#clock');
+  if (c) c.hidden = true;
+}
+function autoMove(f) {
+  const b = battle;
+  if (!b || b.live !== f || b.busy) return;
+  const ts = C.enemyTargets(b, f, { kind: f.weapon.kind, reach: f.weapon.reach });
+  log(`Time is up: ${f.name} ${ts.length ? 'attacks' : 'passes'}.`, 'sys');
+  mineAct(f, ts.length ? { kind: 'attack', target: ts[0] } : { kind: 'pass' });
+}
+
+/* The fingerprint of the battle after an action: turn, dice, and every hero's numbers. */
+function fingerprint(b) {
+  let s = `${b.tick}|${b.rng.state()}|${b.over ? b.winner : '-'}`;
+  for (const f of b.fighters) s += `|${f.id}:${Math.round(f.hp)}:${Math.round(f.mp)}:${Math.round(f.initiative)}:${f.alive ? 1 : 0}:${f.ap || 0}:${f.fx.length}:${f.pos}`;
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return h.toString(36);
+}
+function sendSum(b) {
+  b.acts += 1;
+  const h = fingerprint(b);
+  duel.sums.mine[b.acts] = h;
+  if (duel.link) duel.link.send({ t: 'sum', g: duel.game, n: b.acts, h });
+  checkSum(b.acts);
+}
+function checkSum(n) {
+  const d = duel;
+  const a = d.sums.mine[n], c = d.sums.theirs[n];
+  if (a == null || c == null) return;
+  delete d.sums.mine[n]; delete d.sums.theirs[n];
+  if (a !== c) outOfStep(false, `the two browsers computed different battles (action ${n})`);
+}
+/* Out of step (or a move that does not fit): the match is void, nobody wins. */
+function outOfStep(fromThem, why) {
+  const b = battle, d = duel;
+  if (!b || !d || b.stopped || b.over) return;
+  if (!fromThem && d.link) d.link.send({ t: 'void', g: d.game });
+  stopClock();
+  b.stopped = true; b.busy = true; b.live = null; b.turn = null;
+  clearHand(); $('#groups').hidden = true;
+  const t = $('#turnline'); t.className = 'turnline result'; t.textContent = 'Match void';
+  const r = $('#result'); r.className = 'banner lose'; r.querySelector('b').textContent = 'Void'; r.hidden = false;
+  log(`Match void: ${fromThem ? `${cap(d.them)}'s page found the two battles out of step` : why}. Nobody wins: play a rematch, and if it happens again both reload the page.`, 'ko');
+  $('#btn-rematch').hidden = !d.link; $('#btn-next').hidden = true;
+}
+/* Your friend is gone: before the battle the host keeps waiting; during it, you win. */
+function friendLeft(why) {
+  const d = duel;
+  if (!d) return;
+  if (d.role === 'host' && !battle) {
+    Object.assign(d, { state: 'waiting', them: null, err: `Your friend ${why === 'timeout' ? 'lost the connection' : 'left'} before the battle. The link still works.` });
+    renderSetup();
+    return;
+  }
+  if (d.link) d.link.close();
+  d.link = null;
+  if (!battle) { Object.assign(d, { busy: false, state: 'choosing', err: 'Your friend closed the challenge.' }); renderSetup(); return; }
+  const b = battle;
+  if (!b.over && !b.stopped) {
+    b.stopped = true; b.over = true; b.winner = mySide;
+    finish(why === 'timeout' ? `${cap(d.them)} stopped answering: you win` : `${cap(d.them)} left the match: you win`);
+  } else {
+    log(`${cap(d.them)} left.`, 'sys');
+    $('#btn-rematch').hidden = true;
+  }
+}
+function askRematch() {
+  const d = duel;
+  if (!d || !d.link || !battle) return;
+  d.again.me = true;
+  d.link.send({ t: 'again', g: d.game });
+  rematchButton();
+  if (d.role === 'host' && d.again.them) startMatch();
+}
+function rematchButton() {
+  const bt = $('#btn-rematch'), d = duel;
+  if (!d || !d.again) return;
+  bt.disabled = d.again.me;
+  bt.textContent = d.again.me ? (d.again.them ? 'Starting…' : 'Rematch asked…') : d.again.them ? `Rematch: ${d.them} wants it` : 'Rematch';
+}
+
+if (duel && duel.role === 'host') openHost(0);
