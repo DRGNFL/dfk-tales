@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500&family=JetBrains+Mono:wght@400;600&display=swap">
-<link rel="stylesheet" href="../assets/tales.css?v=13">
+<link rel="stylesheet" href="../assets/tales.css?v=14">
 <style>
 /* Practice arena: your squad against the computer's. One red for the enemy side and for every hit. */
 [hidden] { display: none !important; }
@@ -22,6 +22,16 @@ a.btn:hover { border-color: var(--text); }
 /* ---------- setup ---------- */
 .su-head { display: flex; justify-content: space-between; align-items: end; gap: 14px; flex-wrap: wrap; }
 button.fight { padding: 14px 30px; font-size: 15px; letter-spacing: .22em; }
+/* Whose legion the squad comes from: paste any address (the main way), or connect a wallet. */
+.legionbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; border: 1px solid var(--line); background: var(--panel); }
+.legionbar .lb { font: 600 10px var(--display); letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
+.legionbar b { font: 600 13px var(--mono); }
+.legionbar .info { font: 12px var(--mono); color: var(--muted); }
+.legionbar input { flex: 1 1 360px; min-width: 0; height: 38px; padding: 0 12px; font: 13px var(--mono); }
+.legionbar select { height: 38px; }
+.legionbar .quiet { border-color: transparent; background: none; color: var(--muted); text-transform: none; letter-spacing: 0; font: 12px var(--body); text-decoration: underline; text-underline-offset: 3px; padding: 0 6px; }
+.legionbar .quiet:hover { color: var(--text); }
+.legionbar .err { color: #ffb3ba; font: 12px var(--mono); flex-basis: 100%; }
 .seg { display: inline-flex; align-items: stretch; border: 1px solid var(--line-2); margin-right: 8px; }
 .seg > span { font: 600 10px var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); padding: 0 10px; display: flex; align-items: center; }
 .seg button { border: 0; border-left: 1px solid var(--line-2); padding: 12px 14px; background: var(--panel-2); }
@@ -299,6 +309,7 @@ footer p { margin: 0; }
       </div>
       <div class="row"><span class="seg" id="caps" role="group" aria-label="Level cap"><span>Level cap</span></span><button type="button" class="primary fight" id="btn-fight" disabled>Fight ▸</button></div>
     </div>
+    <div class="legionbar" id="legionbar"></div>
     <p class="status" id="status">Reading the squad…</p>
     <div class="scenes" id="scenes" aria-label="Scene of the arena"></div>
     <div class="tabs" id="tabs" role="tablist" aria-label="Your squad"></div>
@@ -349,6 +360,6 @@ footer p { margin: 0; }
     <p>Skills from the patch notes up to 2.8.2 and, where they leave a gap, the game client's own texts; icons, scenes and visual effects from the game. Traits from the class pages, pet bonuses from the game's list. Stats, accuracy, Speed and starting Initiative: Hubert's Dynamic Stat Calculator. Each battle has a seed: the same seed and the same moves give the same battle.</p>
   </footer>
 </main>
-<script type="module" src="app.js?v=12"></script>
+<script type="module" src="app.js?v=13"></script>
 </body>
 </html>

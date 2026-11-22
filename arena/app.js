@@ -2,7 +2,8 @@ import { getAssetConfig } from 'https://esm.sh/@defikingdoms/game-sdk@0.1.0?deps
 import {
   HeroRenderer, HERO_ANIMATIONS, getHeroWeaponAnimationSet, weaponAnimation, createAnimatedHeroCard,
 } from 'https://esm.sh/@defikingdoms/game-sdk@0.1.0/renderer?deps=ethers@5.8.0';
-import { mountWallet, readLegion } from '../assets/session.js?v=1';
+import { mountWallet, readLegion, getWallet, hasProvider, connectWallet, shortAddr } from '../assets/session.js?v=1';
+import { loadLegion, isAddr, CHAINS } from '../assets/legion.js?v=1';
 import { readSquad, onSquadChange, setSkills, isComplete, setCap, CAPS } from '../assets/squad.js?v=4';
 import { heroLook, heroKey, onArmoryChange } from '../assets/armory.js?v=1';
 import { hookCardIcons } from '../assets/equip-ui.js?v=1';
@@ -146,7 +147,7 @@ function renderSetup() {
   const n = mine.filter(Boolean).length;
   $('#btn-fight').disabled = !ok;
   $('#status').textContent = ok ? `Level cap ${s.cap}. One Codex skill per tier, then Fight: the AI drafts three heroes near your level and plays them.`
-    : n === 0 ? 'No squad yet: press "Choose a hero" on P1, then P2 and P3.'
+    : n === 0 ? (legion.addr ? 'No squad yet: press "Choose a hero" on P1, then P2 and P3.' : 'Paste a wallet address above (yours or any other), then choose a hero for P1, P2 and P3.')
     : `${n} of 3 heroes${n === 3 ? `, but someone is above the level cap ${s.cap}: change them` : ': choose the others'}.`;
   renderScenes();
   renderCaps(s);
@@ -185,7 +186,65 @@ function renderScenes() {
 
 /* Your three places. A place is chosen the old DFK way: select it, then pick the hero in the Legion Viewer. */
 const LV = new URL('../legion-viewer/', location.href).href;
-const pickUrl = (i) => `${LV}?pick=${i + 1}`;
+const pickUrl = (i) => { const q = new URLSearchParams(); if (legion.addr) { q.set('legion', legion.addr); if (legion.chain !== 43114) q.set('chain', String(legion.chain)); } q.set('pick', String(i + 1)); return `${LV}?${q}`; };
+
+/* ---------- whose legion ----------
+   The main way in is to paste an address: any wallet, yours or not, nothing to sign or approve. Connecting a wallet
+   is there too, for who prefers it: it only asks the wallet for its address. The Legion Viewer shares the choice. */
+const legion = { addr: null, chain: 43114, heroes: null, busy: null, err: null, edit: false };
+{
+  const a = store.get('dfk-tales:addr') || getWallet();
+  if (a && isAddr(a)) { legion.addr = a; legion.chain = Number(store.get('dfk-tales:chain')) || 43114; }
+}
+async function useLegion(addr, chain, fresh = false) {
+  addr = String(addr || '').trim();
+  if (!isAddr(addr)) { legion.err = 'That is not a wallet address: 0x followed by 40 characters.'; renderLegionBar(); return; }
+  Object.assign(legion, { addr, chain, err: null, busy: 'Opening the legion…' });
+  renderLegionBar();
+  try {
+    const d = await loadLegion(addr, chain, { fresh, onProgress: (t) => { legion.busy = t; renderLegionBar(); } });
+    store.set('dfk-tales:addr', addr); store.set('dfk-tales:chain', String(chain));
+    legionsP = null; // the computer drafts from the legions kept in this browser: this one too, now
+    Object.assign(legion, { heroes: d.heroes.length, busy: null, edit: false });
+  } catch (e) {
+    console.warn('legion', e);
+    Object.assign(legion, { busy: null, err: e && e.message && /address/.test(e.message) ? e.message : 'The chain did not answer: try again in a moment.' });
+  }
+  renderLegionBar();
+  renderSetup();
+}
+function renderLegionBar() {
+  const box = $('#legionbar');
+  box.replaceChildren(el('span', 'lb', 'Legion'));
+  if (legion.addr && !legion.edit) {
+    const b = el('b', null, shortAddr(legion.addr)); b.title = legion.addr;
+    box.append(b, el('span', 'info', legion.busy || `${CHAINS[legion.chain] || legion.chain}${legion.heroes != null ? ` · ${legion.heroes.toLocaleString('en-US')} heroes` : ''}`));
+    const ch = el('button', null, 'Change'); ch.type = 'button';
+    ch.addEventListener('click', () => { legion.edit = true; renderLegionBar(); box.querySelector('input').focus(); });
+    if (!legion.busy) box.append(ch);
+  } else {
+    const inp = el('input'); inp.type = 'text'; inp.placeholder = 'Paste any wallet address: 0x…'; inp.spellcheck = false; inp.autocomplete = 'off';
+    if (legion.addr) inp.value = legion.addr;
+    const sel = el('select');
+    for (const id of [43114, 8217]) { const o = el('option', null, CHAINS[id]); o.value = id; if (Number(id) === legion.chain) o.selected = true; sel.append(o); }
+    const go = el('button', 'primary', legion.busy ? '…' : 'Load legion'); go.type = 'button'; go.disabled = !!legion.busy;
+    const load = () => useLegion(inp.value, Number(sel.value) || 43114);
+    go.addEventListener('click', load);
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') load(); });
+    box.append(inp, sel, go);
+    if (hasProvider() && !legion.busy) {
+      const w = el('button', 'quiet', 'or connect a wallet'); w.type = 'button';
+      w.title = 'Asks your wallet for its address only: no signature, no transaction, no approval.';
+      w.addEventListener('click', async () => { try { const a = await connectWallet(); useLegion(a, 43114); } catch (e) { console.warn('wallet', e); } });
+      box.append(w);
+    }
+    if (legion.edit && legion.addr) { const c = el('button', 'quiet', 'cancel'); c.type = 'button'; c.addEventListener('click', () => { legion.edit = false; renderLegionBar(); }); box.append(c); }
+    if (legion.busy) box.append(el('span', 'info', legion.busy));
+  }
+  if (legion.err) box.append(el('span', 'err', legion.err));
+}
+if (legion.addr) readLegion(legion.chain, legion.addr).then((d) => { if (d && d.heroes) { legion.heroes = d.heroes.length; renderLegionBar(); } else useLegion(legion.addr, legion.chain); });
+renderLegionBar();
 function renderTabs(s) {
   const box = $('#tabs');
   box.replaceChildren();

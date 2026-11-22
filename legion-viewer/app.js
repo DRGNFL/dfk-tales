@@ -1158,4 +1158,4 @@ const lastChain = store.get('dfk-tales:chain');
 if (linked && isAddr(linked)) openLegion(linked, params.get('chain') || 43114);
 else if (lastAddr && isAddr(lastAddr)) openLegion(lastAddr, lastChain || 43114);
 else if (getWallet()) openLegion(getWallet(), 43114);
-else setStatus('Connect your wallet, or paste any wallet address in the bar at the top, to begin.');
+else setStatus('Paste any wallet address in the bar at the top (yours or anyone\'s) and press Load legion. Connecting a wallet is optional.');

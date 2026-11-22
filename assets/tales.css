@@ -68,7 +68,9 @@ input::placeholder { color: #555; }
 .wallet-chip:hover { border-color: var(--text); }
 .wallet-x { height: 34px; width: 30px; padding: 0; justify-content: center; font: 16px/1 var(--mono); color: var(--muted); border-left: 0; }
 .wallet-x:hover { color: var(--text); }
-.wallet-connect { height: 34px; padding: 0 12px; white-space: nowrap; }
+/* Connecting a wallet is optional (pasting an address does the same): a quiet link, not a call to action. */
+.wallet-connect { height: 34px; padding: 0 8px; white-space: nowrap; border-color: transparent; background: none; color: var(--muted); font-size: 11px; }
+.wallet-connect:hover { color: var(--text); border-color: var(--line-2); }
 
 /* Phones: the page links stay on one line next to the brand and scroll sideways if they must. */
 @media (max-width: 700px) {
