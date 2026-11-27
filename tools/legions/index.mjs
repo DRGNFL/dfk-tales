@@ -312,6 +312,7 @@ try {
   const caughtUp = await scan();
   await score();
   const legions = await rank(caughtUp);
+  saveState(); // names and the contract check are kept for the next run
   if (caughtUp) await check(legions);
   log(`nodes: ${nodes.map((n) => `${n.u.split('/')[2]} ${n.fails} fails`).join(', ')}`);
 } catch (e) {
