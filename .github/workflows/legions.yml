@@ -1,0 +1,67 @@
+# DFK Tales — Legions ranking. Reads the hero owners on Avalanche and ranks the legions by Heroscore X.
+# The results live on the branch legions-data (one commit, replaced every run) and the Legions page reads them from there.
+name: Legions ranking
+
+on:
+  schedule:
+    - cron: '23 */3 * * *'
+  workflow_dispatch:
+    inputs:
+      full:
+        description: 'Score every hero again'
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths:
+      - 'tools/legions/**'
+      - 'assets/heroscore.js'
+      - '.github/workflows/legions.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: legions
+  cancel-in-progress: false
+
+jobs:
+  rank:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Last results
+        run: |
+          mkdir -p data
+          if git fetch --depth=1 origin legions-data; then git archive FETCH_HEAD | tar -x -C data; fi
+          ls -la data
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install
+        working-directory: tools/legions
+        run: npm install --no-audit --no-fund
+
+      - name: Read the chain
+        env:
+          FULL: ${{ inputs.full }}
+          BUDGET_MIN: '320'
+        run: node tools/legions/index.mjs data
+
+      - name: Publish
+        if: always()
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          [ -f data/state.json.gz ] || exit 0
+          mkdir pub && cp data/state.json.gz pub/ && cp data/run.log pub/ 2>/dev/null || true
+          cp data/legions.json pub/ 2>/dev/null || true
+          cd pub
+          git init -q -b legions-data
+          git add -A
+          git -c user.name='DFK Tales' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -qm "Legions $(date -u +%FT%TZ)"
+          git push -fq "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" legions-data

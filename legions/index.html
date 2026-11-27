@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Legions · DFK Tales</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/tales.css?v=14">
+<style>
+/* Every legion on Avalanche, ranked by Heroscore X. The numbers come from the branch legions-data (tools/legions). */
+.lg { max-width: 980px; margin: 0 auto; padding: 24px clamp(16px, 2.5vw, 32px) 56px; display: grid; gap: 22px; }
+.lg h1 { font: 700 clamp(32px, 5vw, 56px)/0.95 var(--display); text-transform: uppercase; letter-spacing: .02em; margin: 2px 0 4px; }
+.lg .eyebrow { font: 600 12px var(--display); letter-spacing: .16em; text-transform: uppercase; color: var(--red); }
+.lg .sub { color: var(--muted); margin: 0; max-width: 640px; }
+.meta { font: 12.5px var(--mono); color: var(--muted); }
+.meta.err { color: var(--red); }
+.note { border: 1px solid var(--red-dim); background: #0d0204; padding: 10px 14px; font-size: 13.5px; }
+.note[hidden], .mine[hidden] { display: none; }
+.bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; }
+.mine { flex: 1 1 320px; border: 1px solid var(--red); background: var(--red-dim); padding: 14px 16px; display: grid; gap: 4px; }
+.mine em { font: 600 11px var(--display); font-style: normal; letter-spacing: .16em; text-transform: uppercase; color: #ffb3bb; }
+.mine b { font: 700 30px/1 var(--display); }
+.mine span { font: 12.5px var(--mono); color: var(--text); }
+.find { flex: 1 1 320px; display: flex; gap: 6px; align-items: center; }
+.find input { flex: 1; min-width: 0; height: 36px; padding: 0 10px; font: 12.5px var(--mono); }
+.find button { height: 36px; padding: 0 14px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { font: 600 11px var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line-2); }
+td { padding: 9px 10px; border-bottom: 1px solid var(--line); }
+th.n, td.n { text-align: right; font-family: var(--mono); }
+td.r { font: 600 14px var(--mono); color: var(--muted); width: 64px; }
+tr.top td.r { color: var(--red); }
+tr.me td { background: var(--red-dim); }
+tr.hit td { outline: 1px solid var(--text); outline-offset: -1px; }
+td a { color: var(--text); font-family: var(--mono); text-decoration: none; }
+td a:hover { color: var(--red); }
+.more { justify-self: center; height: 36px; padding: 0 18px; }
+details { color: var(--muted); font-size: 13px; }
+details summary { cursor: pointer; font: 600 11px var(--display); letter-spacing: .14em; text-transform: uppercase; }
+details table { margin-top: 8px; font-size: 13px; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../">DFK Tales</a>
+  <nav class="nav" aria-label="Pages">
+    <a href="../legion-viewer/">Legion Viewer</a>
+    <a href="../hero-viewer/">Hero Viewer</a>
+    <a href="../arena/">Arena</a>
+    <a href="./" aria-current="page">Legions</a>
+  </nav>
+  <div class="wallet" id="wallet" hidden></div>
+</header>
+<main class="lg">
+  <section>
+    <div class="eyebrow">Avalanche · read straight from the chain</div>
+    <h1>Legions</h1>
+    <p class="sub">Every wallet with DFK heroes, ranked by Heroscore X: the same number as the Legion Viewer, added up over the whole legion.</p>
+  </section>
+  <div class="meta" id="meta">Loading the ranking…</div>
+  <div class="note" id="note" hidden></div>
+  <div class="bar">
+    <div class="mine" id="mine" hidden></div>
+    <form class="find" id="find">
+      <input id="addr" placeholder="Find a legion: 0x…" autocomplete="off" spellcheck="false">
+      <button type="submit">Find</button>
+    </form>
+  </div>
+  <table>
+    <thead><tr><th>#</th><th>Legion</th><th class="n">Heroes</th><th class="n">Heroscore X</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <button class="more" id="more" hidden>Show 100 more</button>
+  <details id="held" hidden>
+    <summary>Heroes held by contracts, not ranked</summary>
+    <table><thead><tr><th>Contract</th><th class="n">Heroes</th><th class="n">Heroscore X</th></tr></thead><tbody id="crows"></tbody></table>
+  </details>
+</main>
+<script type="module">
+import { mountWallet, getWallet, onWalletChange, shortAddr, legionUrl, sameAddr, ago } from '../assets/session.js?v=1';
+mountWallet(document.getElementById('wallet'));
+
+const DATA = 'https://raw.githubusercontent.com/DRGNFL/dfk-tales/legions-data/legions.json';
+const $ = (s) => document.querySelector(s);
+const fmt = new Intl.NumberFormat('en-US');
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+let data = null, shown = 0, hit = null;
+
+const rankOf = (a) => data.legions.findIndex((e) => sameAddr(e[0], a));
+function row([addr, heroes, hsx], i) {
+  const tr = el('tr', i < 3 ? 'top' : '');
+  if (sameAddr(addr, getWallet())) tr.classList.add('me');
+  if (hit && sameAddr(addr, hit)) tr.classList.add('hit');
+  tr.dataset.addr = addr;
+  tr.append(el('td', 'r', String(i + 1)));
+  const td = el('td'); const a = el('a', null, shortAddr(addr)); a.href = legionUrl(addr); a.title = addr; td.append(a); tr.append(td);
+  tr.append(el('td', 'n', fmt.format(heroes)), el('td', 'n', fmt.format(hsx)));
+  return tr;
+}
+function showTo(n) {
+  const rows = $('#rows');
+  for (; shown < Math.min(n, data.legions.length); shown++) rows.append(row(data.legions[shown], shown));
+  $('#more').hidden = shown >= data.legions.length;
+}
+function mine() {
+  const w = getWallet(), box = $('#mine');
+  if (!data || !w) { box.hidden = true; return; }
+  const i = rankOf(w);
+  box.replaceChildren();
+  box.append(el('em', null, 'Your legion'));
+  if (i < 0) { box.append(el('b', null, '—'), el('span', null, `${shortAddr(w)} has no heroes on Avalanche yet`)); }
+  else {
+    const [, heroes, hsx] = data.legions[i];
+    const top = Math.max(1, Math.ceil(((i + 1) / data.legions.length) * 100));
+    box.append(el('b', null, `#${fmt.format(i + 1)} of ${fmt.format(data.legions.length)}`), el('span', null, `${fmt.format(heroes)} heroes · Heroscore X ${fmt.format(hsx)} · top ${top}%`));
+  }
+  box.hidden = false;
+  document.querySelectorAll('#rows tr').forEach((tr) => tr.classList.toggle('me', sameAddr(tr.dataset.addr, w)));
+}
+function find(a) {
+  a = a.trim();
+  if (!/^0x[0-9a-fA-F]{40}$/.test(a)) { $('#meta').textContent = 'That is not a wallet address: 0x followed by 40 characters.'; return; }
+  const i = rankOf(a);
+  if (i < 0) { $('#meta').textContent = `${shortAddr(a)} has no heroes on Avalanche, or holds them in a contract.`; return; }
+  hit = a;
+  document.querySelectorAll('#rows tr.hit').forEach((tr) => tr.classList.remove('hit'));
+  showTo(i + 1);
+  const tr = [...document.querySelectorAll('#rows tr')].find((t) => sameAddr(t.dataset.addr, a));
+  if (tr) { tr.classList.add('hit'); tr.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+  $('#meta').textContent = `${shortAddr(a)} is #${fmt.format(i + 1)} of ${fmt.format(data.legions.length)}.`;
+}
+
+async function load() {
+  try {
+    const r = await fetch(`${DATA}?t=${Math.floor(Date.now() / 6e5)}`);
+    if (!r.ok) throw new Error(r.status === 404 ? 'first' : `HTTP ${r.status}`);
+    data = await r.json();
+  } catch (e) {
+    $('#meta').textContent = e.message === 'first' ? 'The first reading of the chain has not finished yet. Come back in a few hours.' : `Could not load the ranking (${e.message}).`;
+    $('#meta').classList.add('err');
+    return;
+  }
+  const t = Date.parse(data.updatedAt);
+  $('#meta').textContent = `${fmt.format(data.legions.length)} legions · ${fmt.format(data.heroes)} heroes · updated ${ago(t)} · block ${fmt.format(data.block)}`;
+  const notes = [];
+  if (!data.caughtUp) notes.push(`The first reading of the chain is still going (up to block ${fmt.format(data.block)}): the ranking fills in over the next runs.`);
+  if (data.pending) notes.push(`${fmt.format(data.pending)} heroes are not scored yet: their legions will go up.`);
+  if (notes.length) { $('#note').textContent = notes.join(' '); $('#note').hidden = false; }
+  showTo(100);
+  mine();
+  if (data.contracts && data.contracts.length) {
+    const tb = $('#crows');
+    data.contracts.slice(0, 50).forEach(([addr, heroes, hsx]) => {
+      const tr = el('tr'); const td = el('td'); const a = el('a', null, shortAddr(addr));
+      a.href = `https://snowscan.xyz/address/${addr}`; a.target = '_blank'; a.rel = 'noopener'; a.title = addr; td.append(a);
+      tr.append(td, el('td', 'n', fmt.format(heroes)), el('td', 'n', fmt.format(hsx))); tb.append(tr);
+    });
+    $('#held').hidden = false;
+  }
+  const q = new URLSearchParams(location.search).get('legion');
+  if (q) { $('#addr').value = q; find(q); }
+}
+
+$('#more').addEventListener('click', () => showTo(shown + 100));
+$('#find').addEventListener('submit', (e) => { e.preventDefault(); if (data) find($('#addr').value); });
+onWalletChange(mine);
+load();
+</script>
+</body>
+</html>

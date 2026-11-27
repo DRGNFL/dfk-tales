@@ -1,0 +1,10 @@
+{
+  "name": "dfk-tales-legions",
+  "private": true,
+  "type": "module",
+  "description": "Ranks every wallet with DFK heroes on Avalanche by Heroscore X. Runs on GitHub Actions.",
+  "dependencies": {
+    "@defikingdoms/game-sdk": "0.1.0",
+    "ethers": "5.8.0"
+  }
+}
