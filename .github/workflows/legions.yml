@@ -60,6 +60,7 @@ jobs:
           [ -f data/state.json.gz ] || exit 0
           mkdir pub && cp data/state.json.gz pub/ && cp data/run.log pub/ 2>/dev/null || true
           cp data/legions.json pub/ 2>/dev/null || true
+          cp data/working.json pub/ 2>/dev/null || true
           cd pub
           git init -q -b legions-data
           git add -A

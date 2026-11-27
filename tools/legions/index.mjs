@@ -7,6 +7,9 @@
       (bridge, claim, markets) are counted apart and not ranked. Burned heroes (to 0x0 or 0x…dEaD) are dropped.
    4. Names: the player's DFK profile name, read from the profile contracts of the old realms (DFK Chain, Metis,
       Kaia, Harmony: the same address is the same player). Avalanche has no profile contract yet.
+   5. Working Class: for each profession gene (4 gathering, 8 crafting), per legion, how many heroes have it, the sum of
+      each of their 8 stats and, for gathering, the sum of their skill in it and how many are at 10 or more. The page
+      picks the profession's two stats from these sums (working.json).
    With the game off, heroes do not level or get summoned, so only the owners change: a run reads only the new
    transfers. FULL=true scores every hero again.
    Usage: node tools/legions/index.mjs <data dir>. Writes state.json.gz (for the next run), legions.json (for the
@@ -124,8 +127,15 @@ async function scan() {
 }
 
 /* ---------- 2. scores ---------- */
+/* What a hero brings to work: [gathering gene, crafting gene 1, crafting gene 2, STR, INT, WIS, LCK, AGI, VIT, END, DEX,
+   mining, gardening, fishing, foraging skill × 10]. Stats in the HeroCore order. */
+const STATS = ['strength', 'intelligence', 'wisdom', 'luck', 'agility', 'vitality', 'endurance', 'dexterity'];
+const GATHER = ['mining', 'gardening', 'fishing', 'foraging'];
+const work = (h) => [h.statGenes.profession, h.statGenes.crafting1, h.statGenes.crafting2,
+  ...STATS.map((k) => Number(h.stats[k]) || 0), ...GATHER.map((k) => Math.round((Number(h.skills && h.skills[k]) || 0) * 10))];
+
 async function score() {
-  const ids = Object.keys(st.heroes).filter((id) => !BURN.has(st.heroes[id][0]) && (FULL || st.heroes[id][1] == null));
+  const ids = Object.keys(st.heroes).filter((id) => !BURN.has(st.heroes[id][0]) && (FULL || st.heroes[id][1] == null || !st.heroes[id][2]));
   log(`scores: ${ids.length} heroes to read`);
   const client = createDFKClient({ chainId: CHAIN, provider: provider() });
   let done = 0, broken = 0, lastSave = Date.now();
@@ -133,7 +143,7 @@ async function score() {
     for (let t = 0; t < 4; t++) {
       try {
         const hs = await client.heroes.getMany(list);
-        for (const h of hs) { const r = st.heroes[String(h.id)]; if (r) r[1] = Math.round(heroScoreX(h)); }
+        for (const h of hs) { const r = st.heroes[String(h.id)]; if (r) { r[1] = Math.round(heroScoreX(h)); r[2] = work(h); } }
         return;
       } catch (e) { await sleep(700 * (t + 1) * (t + 1)); }
     }
@@ -212,6 +222,7 @@ async function rank(caughtUp) {
     legions, contracts,
   };
   fs.writeFileSync(path.join(DATA, 'legions.json'), JSON.stringify(out));
+  workingClass(held, owner, legions);
   log(`ranking: ${legions.length} legions, ${out.heroes} heroes; ${contracts.length} contracts hold ${contracts.reduce((t, e) => t + e[1], 0)}; ${listed.length} in the Tavern; ${pending} not scored yet`);
   return legions;
 }
@@ -252,6 +263,36 @@ async function names(addrs) {
   };
   await Promise.all(Array.from({ length: 6 }, worker));
   log(`names: ${asked} asked; found ${JSON.stringify(found)}; errors ${JSON.stringify(down)} ${JSON.stringify(why)}`);
+}
+
+/* ---------- Working Class ---------- */
+function workingClass(held, owner, legions) {
+  const ranked = new Set(legions.map((e) => e[0]));
+  const prof = {};
+  const add = (p, o, w, gather) => {
+    if (!p || /unknown/i.test(p)) return;
+    const m = prof[p] || (prof[p] = new Map());
+    const e = m.get(o) || m.set(o, [o, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]).get(o);
+    e[1]++;
+    for (let k = 0; k < 8; k++) e[2 + k] += w[3 + k];
+    if (gather) { const g = GATHER.indexOf(p); e[10] += w[11 + g]; if (w[11 + g] >= 100) e[11]++; }
+  };
+  let pending = 0;
+  for (const [id, h] of held) {
+    const o = owner(id, h);
+    if (!ranked.has(o)) continue;
+    const w = h[2];
+    if (!w) { pending++; continue; }
+    add(w[0], o, w, true);
+    add(w[1], o, w, false);
+    if (w[2] !== w[1]) add(w[2], o, w, false);
+  }
+  const names = {};
+  for (const e of legions) if (e[3]) names[e[0]] = e[3];
+  const out = { v: 1, updatedAt: new Date().toISOString(), block: st.block, pending, stats: ['STR', 'INT', 'WIS', 'LCK', 'AGI', 'VIT', 'END', 'DEX'], names, professions: {} };
+  for (const [p, m] of Object.entries(prof)) out.professions[p] = [...m.values()].map((e) => (GATHER.includes(p) ? e : e.slice(0, 10)));
+  fs.writeFileSync(path.join(DATA, 'working.json'), JSON.stringify(out));
+  log(`working class: ${Object.entries(prof).map(([p, m]) => `${p} ${[...m.values()].reduce((t, e) => t + e[1], 0)}`).join(', ')}; ${pending} heroes not read yet`);
 }
 
 /* ---------- 4. check: the top legions, counted the Legion Viewer's way ---------- */
