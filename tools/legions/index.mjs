@@ -16,7 +16,7 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { ethers } from 'ethers';
-import { createDFKClient, getContractAddress, HERO_AUCTION_ABI } from '@defikingdoms/game-sdk';
+import { createDFKClient, getContractAddress, HERO_AUCTION_ABI, PROFILES_ABI } from '@defikingdoms/game-sdk';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DATA = path.resolve(process.argv[2] || 'data');
@@ -217,28 +217,41 @@ async function rank(caughtUp) {
 }
 
 /* ---------- names: first profile found on the old realms; asked again after a week ---------- */
-const REALMS = [[53935, 'DFK Chain'], [1088, 'Metis'], [8217, 'Kaia'], [1666600000, 'Harmony']];
+const REALMS = [[53935, 'DFK Chain'], [1088, 'Metis'], [8217, 'Kaia'], [1666600000, 'Harmony', 'https://api.harmony.one']];
 async function names(addrs) {
-  const clients = [];
-  for (const [id, label] of REALMS) { try { clients.push([createDFKClient({ chainId: id }), label, id]); } catch (e) { log(`names: no ${label} in the SDK`); } }
+  const realms = [];
+  for (const [id, label, url] of REALMS) {
+    try {
+      const prov = url ? new ethers.providers.StaticJsonRpcProvider(url, id) : createDFKClient({ chainId: id }).provider;
+      realms.push({ label, id, c: new ethers.Contract(getContractAddress('profiles', id), PROFILES_ABI, prov) });
+    } catch (e) { log(`names: ${label} not usable (${e.message.slice(0, 60)})`); }
+  }
   const week = 7 * 864e5;
-  const q = addrs.filter((a) => !st.names[a] || Date.now() - st.names[a][2] > week);
-  const found = {}, down = {}, asked = q.length;
+  const q = addrs.filter((a) => !st.names[a] || !st.names[a][0] || Date.now() - st.names[a][2] > week);
+  const found = {}, down = {}, why = {}, asked = q.length;
   const worker = async () => {
     while (q.length) {
       const a = q.shift();
       let got = null, failed = 0;
-      for (const [c, label, id] of clients) {
+      for (const r of realms) {
         let p = null;
-        try { p = await c.profiles.get(a); } catch (e) { failed++; down[label] = (down[label] || 0) + 1; continue; }
-        if (p && p.name) { got = [p.name, id]; found[label] = (found[label] || 0) + 1; break; }
+        for (let t = 0; t < 2 && !p; t++) {
+          try { p = await r.c.getProfileByAddress(a); }
+          catch (e) {
+            /* A wallet with no profile makes the contract revert: that is an answer, not a failure. */
+            if (e.code === 'CALL_EXCEPTION') { p = { _name: '' }; break; }
+            if (t === 1) { failed++; down[r.label] = (down[r.label] || 0) + 1; why[r.label] = why[r.label] || String(e.code || e.message).slice(0, 80); }
+            else await sleep(800);
+          }
+        }
+        if (p && p._name) { got = [p._name, r.id]; found[r.label] = (found[r.label] || 0) + 1; break; }
       }
       if (got) st.names[a] = [got[0], got[1], Date.now()];
-      else if (failed < clients.length) st.names[a] = ['', 0, Date.now()];
+      else if (failed < realms.length) st.names[a] = ['', 0, Date.now()];
     }
   };
   await Promise.all(Array.from({ length: 6 }, worker));
-  log(`names: ${asked} asked; found ${JSON.stringify(found)}; errors ${JSON.stringify(down)}`);
+  log(`names: ${asked} asked; found ${JSON.stringify(found)}; errors ${JSON.stringify(down)} ${JSON.stringify(why)}`);
 }
 
 /* ---------- 4. check: the top legions, counted the Legion Viewer's way ---------- */
