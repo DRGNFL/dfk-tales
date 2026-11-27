@@ -36,7 +36,10 @@ tr.me td { background: var(--red-dim); }
 tr.hit td { box-shadow: inset 0 1px 0 var(--text), inset 0 -1px 0 var(--text); }
 tr.hit td:first-child { box-shadow: inset 1px 1px 0 var(--text), inset 0 -1px 0 var(--text); }
 tr.hit td:last-child { box-shadow: inset -1px 1px 0 var(--text), inset 0 -1px 0 var(--text); }
-td a { color: var(--text); font-family: var(--mono); text-decoration: none; }
+td a { color: var(--text); text-decoration: none; display: inline-flex; gap: 10px; align-items: baseline; }
+td a b { font: 600 15px var(--display); letter-spacing: .03em; }
+td a small { font: 12px var(--mono); color: var(--muted); }
+td a.anon small { color: var(--text); font-size: 13.5px; }
 td a:hover { color: var(--red); }
 .more { justify-self: center; height: 36px; padding: 0 18px; }
 details { color: var(--muted); font-size: 13px; }
@@ -66,7 +69,7 @@ details table { margin-top: 8px; font-size: 13px; }
   <div class="bar">
     <div class="mine" id="mine" hidden></div>
     <form class="find" id="find">
-      <input id="addr" placeholder="Find a legion: 0x…" autocomplete="off" spellcheck="false">
+      <input id="addr" placeholder="Find a legion: name or 0x…" autocomplete="off" spellcheck="false">
       <button type="submit">Find</button>
     </form>
   </div>
@@ -92,13 +95,15 @@ const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls)
 let data = null, shown = 0, hit = null;
 
 const rankOf = (a) => data.legions.findIndex((e) => sameAddr(e[0], a));
-function row([addr, heroes, hsx], i) {
+const who = (addr, name) => (name ? `${name} (${shortAddr(addr)})` : shortAddr(addr));
+function row([addr, heroes, hsx, name], i) {
   const tr = el('tr', i < 3 ? 'top' : '');
   if (sameAddr(addr, getWallet())) tr.classList.add('me');
   if (hit && sameAddr(addr, hit)) tr.classList.add('hit');
   tr.dataset.addr = addr;
   tr.append(el('td', 'r', String(i + 1)));
-  const td = el('td'); const a = el('a', null, shortAddr(addr)); a.href = legionUrl(addr); a.title = addr; td.append(a); tr.append(td);
+  const td = el('td'); const a = el('a', name ? null : 'anon'); a.href = legionUrl(addr); a.title = addr;
+  if (name) a.append(el('b', null, name)); a.append(el('small', null, shortAddr(addr))); td.append(a); tr.append(td);
   tr.append(el('td', 'n', fmt.format(heroes)), el('td', 'n', fmt.format(hsx)));
   return tr;
 }
@@ -115,24 +120,32 @@ function mine() {
   box.append(el('em', null, 'Your legion'));
   if (i < 0) { box.append(el('b', null, '—'), el('span', null, `${shortAddr(w)} has no heroes on Avalanche yet`)); }
   else {
-    const [, heroes, hsx] = data.legions[i];
+    const [addr, heroes, hsx, name] = data.legions[i];
     const top = Math.max(1, Math.ceil(((i + 1) / data.legions.length) * 100));
-    box.append(el('b', null, `#${fmt.format(i + 1)} of ${fmt.format(data.legions.length)}`), el('span', null, `${fmt.format(heroes)} heroes · Heroscore X ${fmt.format(hsx)} · top ${top}%`));
+    box.append(el('b', null, `#${fmt.format(i + 1)} of ${fmt.format(data.legions.length)}`), el('span', null, `${name ? name + ' · ' : ''}${fmt.format(heroes)} heroes · Heroscore X ${fmt.format(hsx)} · top ${top}%`));
   }
   box.hidden = false;
   document.querySelectorAll('#rows tr').forEach((tr) => tr.classList.toggle('me', sameAddr(tr.dataset.addr, w)));
 }
 function find(a) {
   a = a.trim();
-  if (!/^0x[0-9a-fA-F]{40}$/.test(a)) { $('#found').textContent = 'That is not a wallet address: 0x followed by 40 characters.'; return; }
-  const i = rankOf(a);
+  if (!a) return;
+  let i;
+  if (/^0x[0-9a-fA-F]{40}$/.test(a)) i = rankOf(a);
+  else {
+    const q = a.toLowerCase();
+    i = data.legions.findIndex((e) => e[3] && e[3].toLowerCase() === q);
+    if (i < 0) i = data.legions.findIndex((e) => e[3] && e[3].toLowerCase().includes(q));
+    if (i < 0) { $('#found').textContent = `No legion named “${a}”.`; return; }
+    a = data.legions[i][0];
+  }
   if (i < 0) { $('#found').textContent = `${shortAddr(a)} has no heroes on Avalanche, or holds them in a contract.`; return; }
   hit = a;
   document.querySelectorAll('#rows tr.hit').forEach((tr) => tr.classList.remove('hit'));
   showTo(i + 1);
   const tr = [...document.querySelectorAll('#rows tr')].find((t) => sameAddr(t.dataset.addr, a));
   if (tr) { tr.classList.add('hit'); tr.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
-  $('#found').textContent = `${shortAddr(a)} is #${fmt.format(i + 1)} of ${fmt.format(data.legions.length)}.`;
+  $('#found').textContent = `${who(a, data.legions[i][3])} is #${fmt.format(i + 1)} of ${fmt.format(data.legions.length)}.`;
 }
 
 async function load() {

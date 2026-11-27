@@ -5,6 +5,8 @@
       the same file the Legion Viewer uses, so the number is the same.
    3. Heroes listed in the Tavern count for their seller (as in the Legion Viewer). Heroes held by other contracts
       (bridge, claim, markets) are counted apart and not ranked. Burned heroes (to 0x0 or 0x…dEaD) are dropped.
+   4. Names: the player's DFK profile name, read from the profile contracts of the old realms (DFK Chain, Metis,
+      Kaia, Harmony: the same address is the same player). Avalanche has no profile contract yet.
    With the game off, heroes do not level or get summoned, so only the owners change: a run reads only the new
    transfers. FULL=true scores every hero again.
    Usage: node tools/legions/index.mjs <data dir>. Writes state.json.gz (for the next run), legions.json (for the
@@ -62,9 +64,10 @@ const provider = () => nodes[cur].p;
 
 /* ---------- state ---------- */
 const STATE = path.join(DATA, 'state.json.gz');
-let st = { v: 1, block: 0, heroes: {}, code: {} };
+let st = { v: 1, block: 0, heroes: {}, code: {}, names: {} };
 if (fs.existsSync(STATE)) st = JSON.parse(zlib.gunzipSync(fs.readFileSync(STATE)).toString());
 const saveState = () => fs.writeFileSync(STATE, zlib.gzipSync(JSON.stringify(st)));
+st.names = st.names || {};
 log(`state: block ${st.block}, ${Object.keys(st.heroes).length} heroes, nodes ${RPCS.length}`);
 
 /* ---------- where the contract starts ---------- */
@@ -200,6 +203,8 @@ async function rank(caughtUp) {
   }
   const all = [...by.values()].sort((a, b) => b[2] - a[2] || b[1] - a[1]);
   const legions = all.filter((e) => st.code[e[0]] !== 1);
+  if (left() > 60e3) await names(legions.map((e) => e[0]));
+  for (const e of legions) { const n = st.names[e[0]]; if (n && n[0]) e.push(n[0]); }
   const contracts = all.filter((e) => st.code[e[0]] === 1);
   const out = {
     v: 1, chainId: CHAIN, contract: CORE, updatedAt: new Date().toISOString(), block: st.block, caughtUp, pending,
@@ -209,6 +214,31 @@ async function rank(caughtUp) {
   fs.writeFileSync(path.join(DATA, 'legions.json'), JSON.stringify(out));
   log(`ranking: ${legions.length} legions, ${out.heroes} heroes; ${contracts.length} contracts hold ${contracts.reduce((t, e) => t + e[1], 0)}; ${listed.length} in the Tavern; ${pending} not scored yet`);
   return legions;
+}
+
+/* ---------- names: first profile found on the old realms; asked again after a week ---------- */
+const REALMS = [[53935, 'DFK Chain'], [1088, 'Metis'], [8217, 'Kaia'], [1666600000, 'Harmony']];
+async function names(addrs) {
+  const clients = [];
+  for (const [id, label] of REALMS) { try { clients.push([createDFKClient({ chainId: id }), label, id]); } catch (e) { log(`names: no ${label} in the SDK`); } }
+  const week = 7 * 864e5;
+  const q = addrs.filter((a) => !st.names[a] || Date.now() - st.names[a][2] > week);
+  const found = {}, down = {}, asked = q.length;
+  const worker = async () => {
+    while (q.length) {
+      const a = q.shift();
+      let got = null, failed = 0;
+      for (const [c, label, id] of clients) {
+        let p = null;
+        try { p = await c.profiles.get(a); } catch (e) { failed++; down[label] = (down[label] || 0) + 1; continue; }
+        if (p && p.name) { got = [p.name, id]; found[label] = (found[label] || 0) + 1; break; }
+      }
+      if (got) st.names[a] = [got[0], got[1], Date.now()];
+      else if (failed < clients.length) st.names[a] = ['', 0, Date.now()];
+    }
+  };
+  await Promise.all(Array.from({ length: 6 }, worker));
+  log(`names: ${asked} asked; found ${JSON.stringify(found)}; errors ${JSON.stringify(down)}`);
 }
 
 /* ---------- 4. check: the top legions, counted the Legion Viewer's way ---------- */
