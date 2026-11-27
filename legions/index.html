@@ -33,7 +33,9 @@ th.n, td.n { text-align: right; font-family: var(--mono); }
 td.r { font: 600 14px var(--mono); color: var(--muted); width: 64px; }
 tr.top td.r { color: var(--red); }
 tr.me td { background: var(--red-dim); }
-tr.hit td { outline: 1px solid var(--text); outline-offset: -1px; }
+tr.hit td { box-shadow: inset 0 1px 0 var(--text), inset 0 -1px 0 var(--text); }
+tr.hit td:first-child { box-shadow: inset 1px 1px 0 var(--text), inset 0 -1px 0 var(--text); }
+tr.hit td:last-child { box-shadow: inset -1px 1px 0 var(--text), inset 0 -1px 0 var(--text); }
 td a { color: var(--text); font-family: var(--mono); text-decoration: none; }
 td a:hover { color: var(--red); }
 .more { justify-self: center; height: 36px; padding: 0 18px; }
@@ -57,7 +59,7 @@ details table { margin-top: 8px; font-size: 13px; }
   <section>
     <div class="eyebrow">Avalanche · read straight from the chain</div>
     <h1>Legions</h1>
-    <p class="sub">Every wallet with DFK heroes, ranked by Heroscore X: the same number as the Legion Viewer, added up over the whole legion.</p>
+    <p class="sub">Every wallet with DFK heroes, ranked by Heroscore X: the same number as the Legion Viewer, added up over the whole legion. Only heroes already claimed on Avalanche count.</p>
   </section>
   <div class="meta" id="meta">Loading the ranking…</div>
   <div class="note" id="note" hidden></div>
@@ -68,6 +70,7 @@ details table { margin-top: 8px; font-size: 13px; }
       <button type="submit">Find</button>
     </form>
   </div>
+  <div class="meta" id="found"></div>
   <table>
     <thead><tr><th>#</th><th>Legion</th><th class="n">Heroes</th><th class="n">Heroscore X</th></tr></thead>
     <tbody id="rows"></tbody>
@@ -121,15 +124,15 @@ function mine() {
 }
 function find(a) {
   a = a.trim();
-  if (!/^0x[0-9a-fA-F]{40}$/.test(a)) { $('#meta').textContent = 'That is not a wallet address: 0x followed by 40 characters.'; return; }
+  if (!/^0x[0-9a-fA-F]{40}$/.test(a)) { $('#found').textContent = 'That is not a wallet address: 0x followed by 40 characters.'; return; }
   const i = rankOf(a);
-  if (i < 0) { $('#meta').textContent = `${shortAddr(a)} has no heroes on Avalanche, or holds them in a contract.`; return; }
+  if (i < 0) { $('#found').textContent = `${shortAddr(a)} has no heroes on Avalanche, or holds them in a contract.`; return; }
   hit = a;
   document.querySelectorAll('#rows tr.hit').forEach((tr) => tr.classList.remove('hit'));
   showTo(i + 1);
   const tr = [...document.querySelectorAll('#rows tr')].find((t) => sameAddr(t.dataset.addr, a));
   if (tr) { tr.classList.add('hit'); tr.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
-  $('#meta').textContent = `${shortAddr(a)} is #${fmt.format(i + 1)} of ${fmt.format(data.legions.length)}.`;
+  $('#found').textContent = `${shortAddr(a)} is #${fmt.format(i + 1)} of ${fmt.format(data.legions.length)}.`;
 }
 
 async function load() {
