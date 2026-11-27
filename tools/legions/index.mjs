@@ -131,7 +131,8 @@ async function scan() {
    mining, gardening, fishing, foraging skill × 10]. Stats in the HeroCore order. */
 const STATS = ['strength', 'intelligence', 'wisdom', 'luck', 'agility', 'vitality', 'endurance', 'dexterity'];
 const GATHER = ['mining', 'gardening', 'fishing', 'foraging'];
-const work = (h) => [h.statGenes.profession, h.statGenes.crafting1, h.statGenes.crafting2,
+const dom = (g) => (g && typeof g === 'object' ? g.d : g); // the SDK gives { d, r1, r2, r3 }: the dominant gene counts
+const work = (h) => [dom(h.statGenes.profession), dom(h.statGenes.crafting1), dom(h.statGenes.crafting2),
   ...STATS.map((k) => Number(h.stats[k]) || 0), ...GATHER.map((k) => Math.round((Number(h.skills && h.skills[k]) || 0) * 10))];
 
 async function score() {
@@ -283,9 +284,10 @@ function workingClass(held, owner, legions) {
     if (!ranked.has(o)) continue;
     const w = h[2];
     if (!w) { pending++; continue; }
-    add(w[0], o, w, true);
-    add(w[1], o, w, false);
-    if (w[2] !== w[1]) add(w[2], o, w, false);
+    const [p, c1, c2] = [dom(w[0]), dom(w[1]), dom(w[2])];
+    add(p, o, w, true);
+    add(c1, o, w, false);
+    if (c2 !== c1) add(c2, o, w, false);
   }
   const names = {};
   for (const e of legions) if (e[3]) names[e[0]] = e[3];

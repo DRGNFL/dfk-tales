@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Working Class · DFK Tales</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../assets/tales.css?v=14">
+<style>
+/* Every legion's workforce, profession by profession. A hero works the profession of its gene (gathering) and its two
+   crafting genes. Stat Power = the sum of the profession's two stats. Data: working.json on the branch legions-data. */
+.wc { max-width: 1040px; margin: 0 auto; padding: 24px clamp(16px, 2.5vw, 32px) 56px; display: grid; gap: 20px; }
+.wc h1 { font: 700 clamp(32px, 5vw, 56px)/0.95 var(--display); text-transform: uppercase; letter-spacing: .02em; margin: 2px 0 4px; }
+.wc .eyebrow { font: 600 12px var(--display); letter-spacing: .16em; text-transform: uppercase; color: var(--red); }
+.wc .sub { color: var(--muted); margin: 0; max-width: 700px; }
+.meta { font: 12.5px var(--mono); color: var(--muted); }
+.meta.err { color: var(--red); }
+.tabs { display: grid; gap: 8px; }
+.tabs .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.tabs .row > span { font: 600 11px var(--display); letter-spacing: .16em; text-transform: uppercase; color: var(--muted); width: 84px; }
+.tabs button { height: 32px; padding: 0 12px; font: 600 12px var(--display); letter-spacing: .08em; text-transform: uppercase; background: var(--panel); border: 1px solid var(--line-2); color: var(--muted); cursor: pointer; }
+.tabs button:hover { color: var(--text); border-color: var(--text); }
+.tabs button[aria-pressed="true"] { color: #fff; background: var(--red); border-color: var(--red); }
+.head { display: flex; flex-wrap: wrap; gap: 10px 24px; align-items: baseline; }
+.head h2 { font: 700 28px var(--display); text-transform: uppercase; letter-spacing: .04em; margin: 0; }
+.head .stats { font: 600 13px var(--mono); color: var(--red); }
+.head .hint { font-size: 13px; color: var(--muted); }
+.mine { border: 1px solid var(--red); background: var(--red-dim); padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline; }
+.mine[hidden] { display: none; }
+.mine em { font: 600 11px var(--display); font-style: normal; letter-spacing: .16em; text-transform: uppercase; color: #ffb3bb; }
+.mine b { font: 700 24px/1 var(--display); }
+.mine span { font: 12.5px var(--mono); }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { font: 600 11px var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line-2); white-space: nowrap; }
+th.s { cursor: pointer; }
+th.s:hover { color: var(--text); }
+th.on { color: var(--text); }
+th.on::after { content: " ▼"; color: var(--red); }
+td { padding: 9px 10px; border-bottom: 1px solid var(--line); }
+th.n, td.n { text-align: right; font-family: var(--mono); }
+td.r { font: 600 14px var(--mono); color: var(--muted); width: 56px; }
+tr.top td.r { color: var(--red); }
+tr.me td { background: var(--red-dim); }
+td a { color: var(--text); text-decoration: none; display: inline-flex; gap: 10px; align-items: baseline; }
+td a b { font: 600 15px var(--display); letter-spacing: .03em; }
+td a small { font: 12px var(--mono); color: var(--muted); }
+td a.anon small { color: var(--text); font-size: 13.5px; }
+td a:hover b, td a:hover small { color: var(--red); }
+.more { justify-self: center; height: 36px; padding: 0 18px; }
+.more[hidden] { display: none; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../">DFK Tales</a>
+  <nav class="nav" aria-label="Pages">
+    <a href="../legion-viewer/">Legion Viewer</a>
+    <a href="../hero-viewer/">Hero Viewer</a>
+    <a href="../arena/">Arena</a>
+    <a href="../legions/">Legions</a>
+    <a href="./" aria-current="page">Working Class</a>
+  </nav>
+  <div class="wallet" id="wallet" hidden></div>
+</header>
+<main class="wc">
+  <section>
+    <div class="eyebrow">Avalanche · read straight from the chain</div>
+    <h1>Working Class</h1>
+    <p class="sub">Every legion's workforce, profession by profession. A hero works the profession of its gene and its two crafting genes. Its Stat Power is the sum of the profession's two stats; gathering heroes also bring the skill they earned questing.</p>
+  </section>
+  <div class="meta" id="meta">Loading…</div>
+  <div class="tabs" id="tabs"></div>
+  <div class="head"><h2 id="title"></h2><span class="stats" id="pair"></span><span class="hint" id="hint"></span></div>
+  <div class="mine" id="mine" hidden></div>
+  <table>
+    <thead id="thead"></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <button class="more" id="more" hidden>Show 100 more</button>
+</main>
+<script type="module">
+import { mountWallet, getWallet, onWalletChange, shortAddr, legionUrl, sameAddr, ago } from '../assets/session.js?v=1';
+mountWallet(document.getElementById('wallet'));
+
+const DATA = 'https://raw.githubusercontent.com/DRGNFL/dfk-tales/legions-data/working.json';
+const STATS = ['STR', 'INT', 'WIS', 'LCK', 'AGI', 'VIT', 'END', 'DEX'];
+/* The two stats of each profession. Crafting: only Blacksmithing is known (Hubert, AMA of 13/4/2023); the others wait
+   for the table of the Crafting Gene Reveal. */
+const GATHER = [
+  ['mining', 'Mining', ['STR', 'END']],
+  ['gardening', 'Gardening', ['WIS', 'VIT']],
+  ['fishing', 'Fishing', ['AGI', 'LCK']],
+  ['foraging', 'Foraging', ['DEX', 'INT']],
+];
+const CRAFT = [
+  ['Blacksmithing', 'Blacksmithing', ['STR', 'WIS']],
+  ['Goldsmithing', 'Goldsmithing', null],
+  ['Armorsmithing', 'Armorsmithing', null],
+  ['Woodworking', 'Woodworking', null],
+  ['Leatherworking', 'Leatherworking', null],
+  ['Tailoring', 'Tailoring', null],
+  ['Enchanting', 'Enchanting', null],
+  ['Alchemy', 'Alchemy', null],
+];
+const ALL = [...GATHER.map((p) => [...p, true]), ...CRAFT.map((p) => [...p, false])];
+
+const $ = (s) => document.querySelector(s);
+const fmt = new Intl.NumberFormat('en-US');
+const dec = (v, d = 1) => (Number.isFinite(v) ? v.toFixed(d) : '—');
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+let data = null, cur = null, sortKey = 'power', list = [], shown = 0;
+
+/* One legion in one profession: { addr, name, n, power, avg, skill, ten } */
+function rowsOf(key, pair, gather) {
+  const ix = pair ? pair.map((s) => STATS.indexOf(s)) : null;
+  return (data.professions[key] || []).map((e) => {
+    const n = e[1];
+    const power = ix ? e[2 + ix[0]] + e[2 + ix[1]] : null;
+    return { addr: e[0], name: data.names[e[0]] || '', n, power, avg: power == null ? null : power / n, skill: gather ? e[10] / 10 / n : null, ten: gather ? e[11] : null };
+  });
+}
+const SORTS = { power: (a, b) => (b.power ?? -1) - (a.power ?? -1) || b.n - a.n, avg: (a, b) => (b.avg ?? -1) - (a.avg ?? -1) || b.n - a.n, n: (a, b) => b.n - a.n || (b.power ?? 0) - (a.power ?? 0), skill: (a, b) => b.skill - a.skill || b.n - a.n, ten: (a, b) => b.ten - a.ten || b.skill - a.skill };
+
+function tabs() {
+  const box = $('#tabs'); box.replaceChildren();
+  for (const [label, group] of [['Gathering', GATHER], ['Crafting', CRAFT]]) {
+    const row = el('div', 'row'); row.append(el('span', null, label));
+    for (const [key, name] of group) {
+      const b = el('button', null, name); b.type = 'button'; b.dataset.key = key;
+      b.addEventListener('click', () => open(key));
+      row.append(b);
+    }
+    box.append(row);
+  }
+}
+function open(key) {
+  cur = ALL.find((p) => p[0] === key) || ALL[0];
+  const [k, name, pair, gather] = cur;
+  if (!pair && (sortKey === 'power' || sortKey === 'avg')) sortKey = 'n';
+  if (!gather && (sortKey === 'skill' || sortKey === 'ten')) sortKey = pair ? 'power' : 'n';
+  document.querySelectorAll('#tabs button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.key === k)));
+  $('#title').textContent = name;
+  $('#pair').textContent = pair ? pair.join(' + ') : '';
+  $('#hint').textContent = pair ? '' : 'The two stats of this craft are not known yet: ranked by heroes.';
+  try { history.replaceState(null, '', `?p=${k}`); } catch (e) {}
+  list = rowsOf(k, pair, gather).sort(SORTS[sortKey]);
+  head(); shown = 0; $('#rows').replaceChildren(); showTo(100); mine();
+}
+function head() {
+  const [, , pair, gather] = cur;
+  const tr = el('tr');
+  const th = (text, key, num) => { const t = el('th', [num ? 'n' : '', key ? 's' : '', key === sortKey ? 'on' : ''].join(' ').trim(), text); if (key) t.addEventListener('click', () => { sortKey = key; open(cur[0]); }); tr.append(t); };
+  th('#'); th('Legion'); th('Heroes', 'n', true);
+  if (pair) { th('Stat Power', 'power', true); th('Avg Power', 'avg', true); }
+  if (gather) { th('Avg Skill', 'skill', true); th('Skill 10+', 'ten', true); }
+  $('#thead').replaceChildren(tr);
+}
+function row(r, i) {
+  const [, , pair, gather] = cur;
+  const tr = el('tr', i < 3 ? 'top' : '');
+  if (sameAddr(r.addr, getWallet())) tr.classList.add('me');
+  tr.append(el('td', 'r', String(i + 1)));
+  const td = el('td'); const a = el('a', r.name ? null : 'anon'); a.href = legionUrl(r.addr); a.title = r.addr;
+  if (r.name) a.append(el('b', null, r.name)); a.append(el('small', null, shortAddr(r.addr))); td.append(a); tr.append(td);
+  tr.append(el('td', 'n', fmt.format(r.n)));
+  if (pair) tr.append(el('td', 'n', fmt.format(r.power)), el('td', 'n', dec(r.avg)));
+  if (gather) tr.append(el('td', 'n', dec(r.skill, 2)), el('td', 'n', fmt.format(r.ten)));
+  return tr;
+}
+function showTo(n) {
+  for (; shown < Math.min(n, list.length); shown++) $('#rows').append(row(list[shown], shown));
+  $('#more').hidden = shown >= list.length;
+}
+function mine() {
+  const w = getWallet(), box = $('#mine');
+  if (!data || !w || !cur) { box.hidden = true; return; }
+  const i = list.findIndex((r) => sameAddr(r.addr, w));
+  box.replaceChildren(el('em', null, `Your ${cur[1]}`));
+  if (i < 0) box.append(el('b', null, '—'), el('span', null, `no ${cur[1].toLowerCase()} heroes in ${shortAddr(w)}`));
+  else {
+    const r = list[i];
+    const bits = [`${fmt.format(r.n)} heroes`];
+    if (r.power != null) bits.push(`Stat Power ${fmt.format(r.power)}`, `avg ${dec(r.avg)}`);
+    if (r.skill != null) bits.push(`avg skill ${dec(r.skill, 2)}`, `${fmt.format(r.ten)} at 10+`);
+    box.append(el('b', null, `#${fmt.format(i + 1)} of ${fmt.format(list.length)}`), el('span', null, bits.join(' · ')));
+  }
+  box.hidden = false;
+}
+
+async function load() {
+  try {
+    const r = await fetch(`${DATA}?t=${Math.floor(Date.now() / 6e5)}`);
+    if (!r.ok) throw new Error(r.status === 404 ? 'first' : `HTTP ${r.status}`);
+    data = await r.json();
+  } catch (e) {
+    $('#meta').textContent = e.message === 'first' ? 'The first reading has not finished yet. Come back in a few minutes.' : `Could not load the workforce (${e.message}).`;
+    $('#meta').classList.add('err');
+    return;
+  }
+  const heroes = Object.values(data.professions).length ? GATHER.reduce((t, [k]) => t + (data.professions[k] || []).reduce((s, e) => s + e[1], 0), 0) : 0;
+  $('#meta').textContent = `${fmt.format(heroes)} heroes at work · updated ${ago(Date.parse(data.updatedAt))} · block ${fmt.format(data.block)}${data.pending ? ` · ${fmt.format(data.pending)} heroes not read yet` : ''}`;
+  tabs();
+  open(new URLSearchParams(location.search).get('p') || 'mining');
+}
+
+$('#more').addEventListener('click', () => showTo(shown + 100));
+onWalletChange(mine);
+load();
+</script>
+</body>
+</html>
