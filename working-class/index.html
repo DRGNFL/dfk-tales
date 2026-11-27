@@ -86,8 +86,8 @@ mountWallet(document.getElementById('wallet'));
 
 const DATA = 'https://raw.githubusercontent.com/DRGNFL/dfk-tales/legions-data/working.json';
 const STATS = ['STR', 'INT', 'WIS', 'LCK', 'AGI', 'VIT', 'END', 'DEX'];
-/* The two stats of each profession. Crafting: only Blacksmithing is known (Hubert, AMA of 13/4/2023); the others wait
-   for the table of the Crafting Gene Reveal. */
+/* The two stats of each profession. Crafting: the table of the Crafting Gene Reveal (DFK, April 2023), with the
+   element of each craft. */
 const GATHER = [
   ['mining', 'Mining', ['STR', 'END']],
   ['gardening', 'Gardening', ['WIS', 'VIT']],
@@ -95,16 +95,17 @@ const GATHER = [
   ['foraging', 'Foraging', ['DEX', 'INT']],
 ];
 const CRAFT = [
-  ['Blacksmithing', 'Blacksmithing', ['STR', 'WIS']],
-  ['Goldsmithing', 'Goldsmithing', null],
-  ['Armorsmithing', 'Armorsmithing', null],
-  ['Woodworking', 'Woodworking', null],
-  ['Leatherworking', 'Leatherworking', null],
-  ['Tailoring', 'Tailoring', null],
-  ['Enchanting', 'Enchanting', null],
-  ['Alchemy', 'Alchemy', null],
+  ['Blacksmithing', 'Blacksmithing', ['STR', 'WIS'], 'Fire'],
+  ['Goldsmithing', 'Goldsmithing', ['DEX', 'LCK'], 'Water'],
+  ['Armorsmithing', 'Armorsmithing', ['END', 'AGI'], 'Earth'],
+  ['Woodworking', 'Woodworking', ['VIT', 'DEX'], 'Wind'],
+  ['Leatherworking', 'Leatherworking', ['AGI', 'STR'], 'Lightning'],
+  ['Tailoring', 'Tailoring', ['WIS', 'END'], 'Ice'],
+  ['Enchanting', 'Enchanting', ['INT', 'VIT'], 'Light'],
+  ['Alchemy', 'Alchemy', ['LCK', 'INT'], 'Dark'],
 ];
-const ALL = [...GATHER.map((p) => [...p, true]), ...CRAFT.map((p) => [...p, false])];
+const ELEMENT = Object.fromEntries(CRAFT.map((c) => [c[0], c[3]]));
+const ALL = [...GATHER.map((p) => [...p, true]), ...CRAFT.map(([k, n, pair]) => [k, n, pair, false])];
 
 const $ = (s) => document.querySelector(s);
 const fmt = new Intl.NumberFormat('en-US');
@@ -142,7 +143,7 @@ function open(key) {
   if (!gather && (sortKey === 'skill' || sortKey === 'ten')) sortKey = pair ? 'power' : 'n';
   document.querySelectorAll('#tabs button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.key === k)));
   $('#title').textContent = name;
-  $('#pair').textContent = pair ? pair.join(' + ') : '';
+  $('#pair').textContent = pair ? pair.join(' + ') + (ELEMENT[k] ? ` · ${ELEMENT[k]}` : '') : '';
   $('#hint').textContent = pair ? '' : 'The two stats of this craft are not known yet: ranked by heroes.';
   try { history.replaceState(null, '', `?p=${k}`); } catch (e) {}
   list = rowsOf(k, pair, gather).sort(SORTS[sortKey]);
