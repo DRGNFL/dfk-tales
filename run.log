@@ -1,0 +1,13 @@
+[0.0m] state: block 101582440, 20440 heroes, nodes 4
+[0.0m] transfers: blocks 101582441 → 101612292 (29852 blocks)
+[0.0m] transfers: 0 read in 4 calls, now at block 101612292 of 101612292
+[0.0m] scores: 0 heroes to read
+[0.0m] scores: 0 read, 0 unreadable, 0 left for the next run
+[0.0m] wallets: 0 new addresses to check
+[0.1m] names: 27 asked; found {}; errors {} {}
+[0.1m] working class: gardening 4655, Enchanting 4680, Goldsmithing 4821, Tailoring 4682, mining 5002, Woodworking 4769, Blacksmithing 4696, foraging 5536, Armorsmithing 4704, fishing 5246, Leatherworking 4787, Alchemy 4615; 0 heroes not read yet
+[0.1m] ranking: 108 legions, 20439 heroes; 1 contracts hold 1; 0 in the Tavern; 0 not scored yet
+[0.1m] check 0xdb33…3d9f: 1881 here, 1881 by the Legion Viewer's reading OK
+[0.1m] check 0x1317…2442: 1799 here, 1799 by the Legion Viewer's reading OK
+[0.1m] check 0xf76f…c241: 1083 here, 1083 by the Legion Viewer's reading OK
+[0.1m] nodes: api.avax.network 1 fails, avalanche-c-chain-rpc.publicnode.com 0 fails, avax.meowrpc.com 0 fails, 1rpc.io 0 fails
